@@ -18,6 +18,10 @@
   --font-latin: 'Inter', sans-serif;
   
   --max-width: 760px;
+  
+  /* Font Scaling Variables */
+  --font-scale-arabic: 32px;
+  --font-scale-translation: 17px;
 }
 
 [data-theme='paper'] {
@@ -104,17 +108,18 @@ body {
   filter: blur(80px);
 }
 
+/* Core Container with dynamic padding */
 .reading-container {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 6rem 1.5rem 12rem;
+  padding: 4rem 1.5rem 12rem;
   min-height: 100vh;
 }
 
-/* Typography */
+/* Typography with font size variables */
 .arabic {
   font-family: var(--font-arabic);
-  font-size: clamp(28px, 5.5vw, 38px);
+  font-size: var(--font-scale-arabic);
   line-height: 2.1;
   direction: rtl;
   margin-bottom: 2rem;
@@ -124,7 +129,7 @@ body {
 }
 
 .translation {
-  font-size: clamp(16px, 3.2vw, 18px);
+  font-size: var(--font-scale-translation);
   color: var(--text-secondary);
   line-height: 1.85;
   font-weight: 350;
@@ -133,19 +138,30 @@ body {
   letter-spacing: -0.011em;
 }
 
-/* Frosted Glass Hadith Panel */
-.hadith-glass-panel {
+/* Frosted Glass Card Base */
+.glass-card,
+.hadith-glass-panel,
+.stat-card,
+.daily-reflection-card,
+.narrator-card {
   background: var(--glass-bg);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
-  border-radius: 28px;
+  border-radius: 24px;
+  padding: 2rem;
+  box-shadow: 0 10px 40px var(--glass-shadow);
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  border-color: rgba(46, 159, 133, 0.2);
+}
+
+/* Hadith Card specific spacing */
+.hadith-glass-panel {
   padding: 3.5rem 3rem;
   margin-bottom: 4.5rem;
-  box-shadow: 0 10px 40px var(--glass-shadow);
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), 
-              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), 
-              border-color 0.4s ease;
   position: relative;
   overflow: hidden;
 }
@@ -164,7 +180,6 @@ body {
 
 .hadith-glass-panel:hover {
   transform: translateY(-4px);
-  border-color: rgba(46, 159, 133, 0.2);
 }
 
 .hadith-glass-panel:hover::before {
@@ -194,10 +209,10 @@ body {
   pointer-events: none;
 }
 
-/* Toolbar */
-.toolbar-pill {
+/* Dashboard Floating Bottom Bar */
+.bottom-nav-bar {
   position: fixed;
-  bottom: 2.5rem;
+  bottom: 2rem;
   left: 50%;
   transform: translateX(-50%);
   background: var(--glass-bg);
@@ -205,40 +220,150 @@ body {
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--glass-border);
   border-radius: 999px;
-  padding: 0.6rem 1.4rem;
+  padding: 0.5rem 1rem;
   display: flex;
-  gap: 1.25rem;
+  gap: 1.5rem;
   align-items: center;
-  z-index: 100;
+  z-index: 150;
   box-shadow: 0 12px 42px var(--glass-shadow);
 }
 
-.toolbar-button {
+.nav-item-btn {
   background: none;
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  padding: 0.6rem;
-  border-radius: 50%;
   position: relative;
 }
 
-.toolbar-button:hover {
+.nav-item-btn:hover {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.08);
-  transform: scale(1.08);
 }
 
-[data-theme='paper'] .toolbar-button:hover {
+[data-theme='paper'] .nav-item-btn:hover {
   background: rgba(0, 0, 0, 0.05);
 }
 
-.toolbar-button.active {
+.nav-item-btn.active {
   color: var(--accent-emerald);
+  background: var(--accent-emerald-light);
+  font-weight: 500;
+}
+
+/* Home Dashboard Styles */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+@media (max-width: 600px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-card {
+  text-align: center;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stat-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent-emerald);
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Daily Reflection Section */
+.daily-reflection-card {
+  border-left: 4px solid var(--accent-gold);
+  margin-bottom: 3rem;
+  position: relative;
+}
+
+/* Narrator Ruwaats Grid */
+.narrator-card {
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.narrator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: 1rem;
+}
+
+.narrator-title {
+  color: var(--accent-gold);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Settings Sliders */
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 50%;
+}
+
+.font-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--glass-border);
+  outline: none;
+}
+
+.font-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-emerald);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.font-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
 }
 
 /* Action Controls Inside Hadith Panel */
