@@ -24,24 +24,40 @@ import {
 import { db, isSupabaseConfigured } from './supabaseClient';
 import { ruwaatsData } from './ruwaats';
 import type { Theme, Hadith } from './types';
+import { api } from './api';
+import type { Chapter } from './api';
 
-type Tab = 'home' | 'reader' | 'chapters' | 'narrators' | 'bookmarks' | 'settings';
+type Tab = 'home' | 'chapters' | 'narrators' | 'bookmarks' | 'settings';
 
 const App: React.FC = () => {
-  const [hadiths, setHadiths] = useState<Hadith[]>([]);
+  // Navigation & Chapters Index
+  const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<Theme>('night');
   const [currentTab, setCurrentTab] = useState<Tab>('home');
   const [showToolbar, setShowToolbar] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   
+  // Chapter Detail view state
+  const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
+  const [chapterHadiths, setChapterHadiths] = useState<Hadith[]>([]);
+  const [loadingHadiths, setLoadingHadiths] = useState(false);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchResults, setSearchResults] = useState<Hadith[]>([]);
+  const [searching, setSearching] = useState(false);
+
   // Interactive features state
   const [bookmarkedIds, setBookmarkedIds] = useState<number[]>([]);
+  const [bookmarkedHadiths, setBookmarkedHadiths] = useState<Hadith[]>([]);
+  const [notesWithHadiths, setNotesWithHadiths] = useState<{hadith: Hadith, content: string}[]>([]);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [noteInput, setNoteInput] = useState('');
   const [activeNoteHadith, setActiveNoteHadith] = useState<Hadith | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [lastReadId, setLastReadId] = useState<number | null>(null);
+  const [lastReadHadith, setLastReadHadith] = useState<Hadith | null>(null);
+  const [dailyHadith, setDailyHadith] = useState<Hadith | null>(null);
   const [focusMode, setFocusMode] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -52,24 +68,44 @@ const App: React.FC = () => {
   // Narrators UI state
   const [expandedNarrator, setExpandedNarrator] = useState<number | null>(null);
 
-  // Intersection observer ref to track reading progress in reader view
+  // Intersection observer ref to track reading progress in chapter view
   const hadithRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   // Initial Load
   useEffect(() => {
     const loadData = async () => {
       try {
-        const data = await db.getHadiths();
-        setHadiths(data);
+        setLoading(true);
+
+        // 1. Fetch Chapters list from API
+        const data = await api.fetchChapters();
+        setChapters(data);
         
+        // 2. Fetch bookmarks from database
         const bms = await db.getBookmarks();
         setBookmarkedIds(bms);
+        const bmHadiths = await db.getBookmarkedHadiths();
+        setBookmarkedHadiths(bmHadiths);
         
+        // 3. Fetch notes from database
         const nts = await db.getNotes();
         setNotes(nts);
+        const notesH = await db.getNotesWithHadiths();
+        setNotesWithHadiths(notesH);
         
-        const progress = await db.getReadingProgress();
-        setLastReadId(progress);
+        // 4. Fetch progress from database
+        const progressHadith = await db.getReadingProgressHadith();
+        setLastReadHadith(progressHadith);
+
+        // 5. Fetch default reflection from API (Hadith #1)
+        try {
+          const firstChapterHadiths = await api.fetchHadithsByChapter(1);
+          if (firstChapterHadiths && firstChapterHadiths.length > 0) {
+            setDailyHadith(firstChapterHadiths[0]);
+          }
+        } catch (apiErr) {
+          console.warn("Could not load dynamic daily reflection hadith", apiErr);
+        }
       } catch (err) {
         console.error("Failed to load initial data", err);
       } finally {
@@ -93,9 +129,9 @@ const App: React.FC = () => {
     document.documentElement.style.setProperty('--font-scale-translation', `${translationFontSize}px`);
   }, [translationFontSize]);
 
-  // Scroll listener for bottom navigation bar visibility (only in Reader tab)
+  // Scroll listener for bottom navigation bar visibility (only in chapter reading view)
   useEffect(() => {
-    if (currentTab !== 'reader') {
+    if (currentTab !== 'chapters' || !activeChapter) {
       setShowToolbar(true);
       return;
     }
@@ -113,11 +149,11 @@ const App: React.FC = () => {
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY, currentTab]);
+  }, [lastScrollY, currentTab, activeChapter]);
 
   // Observer to track which Hadith is in view to save progress
   useEffect(() => {
-    if (hadiths.length === 0 || currentTab !== 'reader') return;
+    if (chapterHadiths.length === 0 || currentTab !== 'chapters' || !activeChapter) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -126,8 +162,11 @@ const App: React.FC = () => {
             const idStr = entry.target.getAttribute('data-hadith-id');
             if (idStr) {
               const id = parseInt(idStr, 10);
-              db.saveReadingProgress(id);
-              setLastReadId(id);
+              const matched = chapterHadiths.find(h => h.id === id);
+              if (matched) {
+                db.saveReadingProgress(matched);
+                setLastReadHadith(matched);
+              }
             }
           }
         });
@@ -135,12 +174,13 @@ const App: React.FC = () => {
       { threshold: 0.3, rootMargin: "-100px 0px -200px 0px" }
     );
 
+    // Filter refs to make sure elements are valid
     Object.values(hadithRefs.current).forEach((el) => {
       if (el) observer.observe(el);
     });
 
     return () => observer.disconnect();
-  }, [hadiths, currentTab]);
+  }, [chapterHadiths, currentTab, activeChapter]);
 
   // Helper for custom short toasts
   const triggerToast = (msg: string) => {
@@ -149,13 +189,18 @@ const App: React.FC = () => {
   };
 
   // Toggle bookmark function
-  const handleToggleBookmark = async (id: number) => {
-    const isBookmarked = await db.toggleBookmark(id);
+  const handleToggleBookmark = async (hadith: Hadith) => {
+    const isBookmarked = await db.toggleBookmark(hadith);
+    
+    // Refresh bookmarks status
+    const bms = await db.getBookmarks();
+    setBookmarkedIds(bms);
+    const bmHadiths = await db.getBookmarkedHadiths();
+    setBookmarkedHadiths(bmHadiths);
+
     if (isBookmarked) {
-      setBookmarkedIds(prev => [...prev, id]);
       triggerToast("Moment saved to repository.");
     } else {
-      setBookmarkedIds(prev => prev.filter(bId => bId !== id));
       triggerToast("Removed from repository.");
     }
   };
@@ -168,9 +213,14 @@ const App: React.FC = () => {
 
   const handleSaveNote = async () => {
     if (!activeNoteHadith) return;
-    const success = await db.saveNote(activeNoteHadith.id, noteInput);
+    const success = await db.saveNote(activeNoteHadith, noteInput);
     if (success) {
-      setNotes(prev => ({ ...prev, [activeNoteHadith.id]: noteInput }));
+      // Refresh notes list
+      const nts = await db.getNotes();
+      setNotes(nts);
+      const notesH = await db.getNotesWithHadiths();
+      setNotesWithHadiths(notesH);
+
       triggerToast("Reflection note recorded.");
       setActiveNoteHadith(null);
     } else {
@@ -181,9 +231,12 @@ const App: React.FC = () => {
   const handleDeleteNote = async (id: number) => {
     const success = await db.deleteNote(id);
     if (success) {
-      const updatedNotes = { ...notes };
-      delete updatedNotes[id];
-      setNotes(updatedNotes);
+      // Refresh notes list
+      const nts = await db.getNotes();
+      setNotes(nts);
+      const notesH = await db.getNotesWithHadiths();
+      setNotesWithHadiths(notesH);
+
       triggerToast("Reflection removed.");
       setActiveNoteHadith(null);
     }
@@ -196,25 +249,93 @@ const App: React.FC = () => {
     triggerToast("Hadith copied to clipboard.");
   };
 
-  // Jump to specific hadith inside the reader tab
-  const handleJumpToHadith = (id: number) => {
-    setCurrentTab('reader');
-    setTimeout(() => {
-      const el = document.getElementById(`hadith-card-${id}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // Select chapter and load hadiths
+  const handleSelectChapter = async (chapterId: number, targetHadithId?: number) => {
+    let ch = chapters.find(c => c.id === chapterId);
+    
+    // If not found in memory yet, wait until chapters load
+    if (!ch && chapters.length === 0) {
+      try {
+        const loadedChapters = await api.fetchChapters();
+        setChapters(loadedChapters);
+        ch = loadedChapters.find(c => c.id === chapterId);
+      } catch (err) {
+        console.error("Failed to load chapters on demand", err);
       }
-    }, 100);
+    }
+    
+    if (!ch) {
+      triggerToast("Chapter not found.");
+      return;
+    }
+    
+    // Clear search status
+    setSearchActive(false);
+    
+    setActiveChapter(ch);
+    setChapterHadiths([]);
+    setLoadingHadiths(true);
+    setCurrentTab('chapters');
+
+    try {
+      const hadithsList = await api.fetchHadithsByChapter(chapterId);
+      setChapterHadiths(hadithsList);
+      
+      if (targetHadithId) {
+        setTimeout(() => {
+          const el = document.getElementById(`hadith-card-${targetHadithId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 400);
+      }
+    } catch (e) {
+      console.error("Failed to load chapter hadiths", e);
+      triggerToast("Failed to retrieve chapter hadiths.");
+    } finally {
+      setLoadingHadiths(false);
+    }
   };
 
-  // Search filter
-  const filteredHadiths = hadiths.filter(h => 
-    h.arabic.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    h.translation.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    h.kitab.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    h.bab.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    h.number.includes(searchQuery)
-  );
+  // Global Search Functions
+  const handleSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!searchQuery.trim()) {
+      setSearchActive(false);
+      setSearchResults([]);
+      return;
+    }
+
+    setSearching(true);
+    setSearchActive(true);
+    setActiveChapter(null); // Return to list/search view inside chapters tab
+    setCurrentTab('chapters');
+
+    try {
+      const results = await api.searchHadiths(searchQuery);
+      setSearchResults(results);
+    } catch (err) {
+      console.error("Search failed", err);
+      triggerToast("Search failed.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchActive(false);
+    setSearchResults([]);
+  };
+
+  // Nav Item click handler
+  const handleTabClick = (tab: Tab) => {
+    if (tab === 'chapters') {
+      setActiveChapter(null);
+      setSearchActive(false);
+    }
+    setCurrentTab(tab);
+  };
 
   return (
     <div className="app-root">
@@ -269,7 +390,7 @@ const App: React.FC = () => {
                 {/* Statistics Row */}
                 <div className="dashboard-grid">
                   <div className="stat-card">
-                    <div className="stat-number">{hadiths.length}</div>
+                    <div className="stat-number">7,276</div>
                     <div className="stat-label">Hadiths Compiled</div>
                   </div>
                   <div className="stat-card">
@@ -277,25 +398,25 @@ const App: React.FC = () => {
                     <div className="stat-label">Saved Moments</div>
                   </div>
                   <div className="stat-card">
-                    <div className="stat-number">{Object.keys(notes).length}</div>
+                    <div className="stat-number">{notesWithHadiths.length}</div>
                     <div className="stat-label">Insights Recorded</div>
                   </div>
                 </div>
 
                 {/* Continue reading panel */}
-                {lastReadId && (
-                  <div className="glass-card" style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {lastReadHadith && (
+                  <div className="glass-card" style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--glass-border)' }}>
                     <div>
                       <h4 style={{ color: 'var(--accent-emerald)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.4rem' }}>
                         Last Reading Session
                       </h4>
                       <p style={{ fontWeight: 500 }}>
-                        Hadith {hadiths.find(h => h.id === lastReadId)?.number} — {hadiths.find(h => h.id === lastReadId)?.bab}
+                        Hadith {lastReadHadith.number} — {lastReadHadith.bab}
                       </p>
                     </div>
                     <button 
                       className="primary-btn" 
-                      onClick={() => handleJumpToHadith(lastReadId)}
+                      onClick={() => handleSelectChapter(lastReadHadith.chapterId || 1, lastReadHadith.id)}
                       style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1.2rem' }}
                     >
                       Resume <ArrowUpRight size={16} />
@@ -303,203 +424,74 @@ const App: React.FC = () => {
                   </div>
                 )}
 
+                {/* Quick Search on Home Tab */}
+                <div className="glass-card" style={{ marginBottom: '3rem', padding: '2rem', border: '1px solid var(--glass-border)' }}>
+                  <h4 style={{ color: 'var(--accent-gold)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.8rem' }}>
+                    Quick Search
+                  </h4>
+                  <form onSubmit={handleSearch} style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                      <Search size={18} style={{ position: 'absolute', left: '1.2rem', color: 'var(--text-secondary)' }} />
+                      <input
+                        type="text"
+                        placeholder="Type keyword (e.g. intention) and press Enter..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.8rem 1rem 0.8rem 3rem',
+                          background: 'var(--input-bg)',
+                          border: '1px solid var(--glass-border)',
+                          borderRadius: '12px',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.9rem',
+                          outline: 'none'
+                        }}
+                      />
+                    </div>
+                    <button type="submit" className="primary-btn" style={{ padding: '0.8rem 1.4rem', fontSize: '0.85rem' }}>
+                      Search
+                    </button>
+                  </form>
+                </div>
+
                 {/* Curated Daily Hadith Reflection */}
                 <div className="daily-reflection-card">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-gold)', marginBottom: '1.5rem', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
                     <Sparkles size={14} />
                     Curated Hadith Reflection
                   </div>
-                  {hadiths.length > 0 && (
+                  {dailyHadith ? (
                     <div>
-                      <p className="arabic" style={{ fontSize: '1.6rem', lineHeight: 1.9, marginBottom: '1.5rem' }}>
-                        {hadiths[hadiths.length - 1].arabic}
+                      <p className="arabic" style={{ fontSize: '1.6rem', lineHeight: 1.9, marginBottom: '1.5rem', direction: 'rtl', textAlign: 'right' }}>
+                        {dailyHadith.arabic}
                       </p>
                       <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', fontStyle: 'italic', marginBottom: '1.5rem' }}>
-                        "{hadiths[hadiths.length - 1].translation}"
+                        "{dailyHadith.translation}"
                       </p>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '0.8rem', color: 'var(--accent-emerald)', fontWeight: 500 }}>
-                          {hadiths[hadiths.length - 1].kitab} • Bab {hadiths[hadiths.length - 1].number}
+                          {dailyHadith.kitab} • Hadith #{dailyHadith.number}
                         </span>
                         <button 
                           className="primary-btn" 
-                          onClick={() => handleJumpToHadith(hadiths[hadiths.length - 1].id)}
+                          onClick={() => handleSelectChapter(dailyHadith.chapterId || 1, dailyHadith.id)}
                           style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
                         >
                           Read in Context
                         </button>
                       </div>
                     </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                      Loading reflection wisdom...
+                    </div>
                   )}
                 </div>
               </motion.div>
             )}
 
-            {/* TAB 2: READER CANVAS */}
-            {currentTab === 'reader' && (
-              <motion.div
-                key="reader"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                {/* Modern Glass Search Bar */}
-                <div style={{ marginBottom: '2.5rem', display: 'flex', gap: '1rem', width: '100%' }}>
-                  <div style={{
-                    position: 'relative',
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}>
-                    <Search size={18} style={{
-                      position: 'absolute',
-                      left: '1.2rem',
-                      color: 'var(--text-secondary)'
-                    }} />
-                    <input
-                      type="text"
-                      placeholder="Search translation, Arabic, chapters, or hadith number..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '1rem 1rem 1rem 3rem',
-                        background: 'var(--glass-bg)',
-                        backdropFilter: 'blur(12px)',
-                        border: '1px solid var(--glass-border)',
-                        borderRadius: '16px',
-                        color: 'var(--text-primary)',
-                        fontSize: '0.95rem',
-                        outline: 'none',
-                        transition: 'all 0.3s ease'
-                      }}
-                    />
-                    {searchQuery && (
-                      <button
-                        onClick={() => setSearchQuery('')}
-                        style={{
-                          position: 'absolute',
-                          right: '1.2rem',
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {filteredHadiths.length === 0 ? (
-                  <div className="glass-card" style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-secondary)' }}>
-                    No hadiths match your search query.
-                  </div>
-                ) : (
-                  filteredHadiths.map((hadith) => {
-                    const isBookmarked = bookmarkedIds.includes(hadith.id);
-                    const hasNote = !!notes[hadith.id];
-                    
-                    return (
-                      <div 
-                        key={hadith.id} 
-                        id={`hadith-card-${hadith.id}`}
-                        ref={el => { hadithRefs.current[hadith.id] = el; }}
-                        data-hadith-id={hadith.id}
-                      >
-                        <motion.article 
-                          className="hadith-glass-panel"
-                          initial={{ opacity: 0, y: 30 }}
-                          whileInView={{ opacity: 1, y: 0 }}
-                          viewport={{ once: true, margin: "-120px" }}
-                          transition={{ duration: 0.8 }}
-                        >
-                          {/* Hadith Metadata */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
-                            <span style={{ 
-                              color: 'var(--accent-gold)', 
-                              fontSize: '0.85rem', 
-                              fontWeight: 500,
-                              letterSpacing: '1px',
-                              textTransform: 'uppercase'
-                            }}>
-                              {hadith.kitab} • {hadith.bab}
-                            </span>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                              #{hadith.number}
-                            </span>
-                          </div>
-
-                          {/* Arabic text */}
-                          <div className="arabic">
-                            {hadith.arabic}
-                          </div>
-
-                          {/* English Translation */}
-                          <div className="translation">
-                            {hadith.translation}
-                          </div>
-
-                          {/* Note block if exists */}
-                          {hasNote && (
-                            <div style={{ 
-                              background: 'var(--accent-emerald-light)', 
-                              padding: '1.25rem 1.5rem', 
-                              borderRadius: '16px',
-                              marginBottom: '2rem',
-                              fontSize: '0.9rem',
-                              borderLeft: '3px solid var(--accent-emerald)',
-                              color: 'var(--text-primary)'
-                            }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-emerald)', textTransform: 'uppercase' }}>
-                                <FileText size={12} />
-                                Personal Reflection Note
-                              </div>
-                              <p style={{ fontStyle: 'italic' }}>"{notes[hadith.id]}"</p>
-                            </div>
-                          )}
-
-                          {/* Actions */}
-                          {!focusMode && (
-                            <div className="hadith-actions">
-                              <button 
-                                className={`action-btn ${isBookmarked ? 'active' : ''}`}
-                                onClick={() => handleToggleBookmark(hadith.id)}
-                              >
-                                <Bookmark size={15} fill={isBookmarked ? "currentColor" : "none"} />
-                                <span>{isBookmarked ? 'Saved' : 'Save'}</span>
-                              </button>
-
-                              <button 
-                                className={`action-btn ${hasNote ? 'active' : ''}`}
-                                onClick={() => handleOpenNoteModal(hadith)}
-                              >
-                                <FileText size={15} />
-                                <span>{hasNote ? 'Edit Note' : 'Add Note'}</span>
-                              </button>
-
-                              <button 
-                                className="action-btn"
-                                onClick={() => handleShare(hadith)}
-                              >
-                                <Share2 size={15} />
-                                <span>Share</span>
-                              </button>
-                            </div>
-                          )}
-                        </motion.article>
-                      </div>
-                    );
-                  })
-                )}
-              </motion.div>
-            )}
-
-            {/* TAB 3: CHAPTERS INDEX (LIST FAHRS) */}
+            {/* TAB 2: CHAPTERS INDEX (LIST FAHRS & CHAPTER READING CANVAS) */}
             {currentTab === 'chapters' && (
               <motion.div
                 key="chapters"
@@ -507,57 +499,371 @@ const App: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: 500 }}>Fahras (Chapters Index)</h2>
-                  <div style={{ display: 'flex', gap: '0.5rem', color: 'var(--accent-emerald)' }}>
-                    <BookOpen size={18} />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Index Compiled</span>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                  {Array.from(new Set(hadiths.map(h => h.kitab))).map(kitab => (
-                    <div key={kitab} className="glass-card" style={{ padding: '2rem' }}>
-                      <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.25rem', fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 600, borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem' }}>
-                        {kitab}
-                      </h3>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                        {hadiths.filter(h => h.kitab === kitab).map(h => (
-                          <button
-                            key={h.id}
-                            onClick={() => handleJumpToHadith(h.id)}
-                            style={{
-                              textAlign: 'left',
-                              background: 'var(--input-bg)',
-                              border: '1px solid var(--glass-border)',
-                              borderRadius: '12px',
-                              padding: '1rem 1.25rem',
-                              color: 'var(--text-primary)',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              width: '100%',
-                              transition: 'border-color 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-emerald)'}
-                            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--glass-border)'}
-                          >
-                            <span style={{ fontSize: '0.95rem', fontWeight: 400 }}>{h.bab}</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                              <span>Hadith #{h.number}</span>
-                              <ChevronRight size={14} />
-                            </div>
-                          </button>
-                        ))}
+                {/* 1. Main Chapters List View */}
+                {!activeChapter && !searchActive && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
+                      <h2 style={{ fontSize: '1.5rem', fontWeight: 500 }}>Fahras (Chapters Index)</h2>
+                      <div style={{ display: 'flex', gap: '0.5rem', color: 'var(--accent-emerald)' }}>
+                        <BookOpen size={18} />
+                        <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>99 Chapters</span>
                       </div>
                     </div>
-                  ))}
-                </div>
+
+                    {/* Dynamic Search Bar inside Chapters Tab */}
+                    <form onSubmit={handleSearch} style={{ marginBottom: '2.5rem', display: 'flex', gap: '1rem', width: '100%' }}>
+                      <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                        <Search size={18} style={{ position: 'absolute', left: '1.2rem', color: 'var(--text-secondary)' }} />
+                        <input
+                          type="text"
+                          placeholder="Search translation details..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '1rem 1rem 1rem 3rem',
+                            background: 'var(--glass-bg)',
+                            backdropFilter: 'blur(12px)',
+                            border: '1px solid var(--glass-border)',
+                            borderRadius: '16px',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.95rem',
+                            outline: 'none',
+                            transition: 'all 0.3s ease'
+                          }}
+                        />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            onClick={handleClearSearch}
+                            style={{
+                              position: 'absolute',
+                              right: '1.2rem',
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--text-secondary)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <X size={16} />
+                          </button>
+                        )}
+                      </div>
+                      <button type="submit" className="primary-btn" style={{ padding: '0.8rem 1.6rem' }}>
+                        Search
+                      </button>
+                    </form>
+
+                    {/* Chapters grid */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                      {chapters.map(chapter => (
+                        <div 
+                          key={chapter.id} 
+                          className="glass-card" 
+                          style={{ 
+                            padding: '1.5rem', 
+                            cursor: 'pointer', 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            transition: 'all 0.2s ease',
+                            border: '1px solid var(--glass-border)'
+                          }}
+                          onClick={() => handleSelectChapter(chapter.id)}
+                          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-emerald)'}
+                          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+                        >
+                          <div>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                              Chapter {chapter.chapterNumber}
+                            </span>
+                            <h3 style={{ fontSize: '1.15rem', fontWeight: 500, margin: '0.2rem 0' }}>
+                              {chapter.chapterEnglish}
+                            </h3>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '1.2rem', color: 'var(--accent-emerald)' }}>
+                              {chapter.chapterArabic}
+                            </span>
+                            <ChevronRight size={18} style={{ color: 'var(--text-secondary)' }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* 2. Global Search Results View */}
+                {searchActive && !activeChapter && (
+                  <>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '2rem' }}>
+                      <button 
+                        onClick={handleClearSearch}
+                        className="glass-card"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '0.6rem 1.2rem',
+                          border: '1px solid var(--glass-border)',
+                          background: 'var(--glass-bg)',
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.9rem',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-emerald)'}
+                        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+                      >
+                        ← Back to Index
+                      </button>
+                      <h2 style={{ fontSize: '1.5rem', fontWeight: 500 }}>Search Results for: "{searchQuery}"</h2>
+                    </div>
+
+                    {searching ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '6rem 0' }}>
+                        <motion.div 
+                          animate={{ rotate: 360 }} 
+                          transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                          style={{ display: 'inline-block', marginBottom: '1rem' }}
+                        >
+                          <Compass size={32} style={{ color: 'var(--accent-emerald)' }} />
+                        </motion.div>
+                        <p>Searching Sahih al-Bukhari...</p>
+                      </div>
+                    ) : searchResults.length === 0 ? (
+                      <div className="glass-card" style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-secondary)' }}>
+                        No matching hadiths found for this search.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        {searchResults.map((hadith) => {
+                          const isBookmarked = bookmarkedIds.includes(hadith.id);
+                          const hasNote = !!notes[hadith.id];
+                          return (
+                            <article key={hadith.id} className="hadith-glass-panel">
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                                <span style={{ color: 'var(--accent-gold)', fontSize: '0.85rem', fontWeight: 500, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                                  {hadith.kitab} • {hadith.bab}
+                                </span>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                  Hadith #{hadith.number}
+                                </span>
+                              </div>
+
+                              {hadith.englishNarrator && (
+                                <div style={{ color: 'var(--accent-emerald)', fontSize: '0.9rem', fontStyle: 'italic', marginBottom: '1.2rem' }}>
+                                  {hadith.englishNarrator}
+                                </div>
+                              )}
+
+                              <div className="arabic" style={{ fontSize: 'var(--font-scale-arabic)', lineHeight: 1.9, marginBottom: '2rem', direction: 'rtl', textAlign: 'right' }}>
+                                {hadith.arabic}
+                              </div>
+
+                              <div className="translation" style={{ fontSize: 'var(--font-scale-translation)', lineHeight: 1.7, color: 'var(--text-primary)', marginBottom: '2rem' }}>
+                                {hadith.translation}
+                              </div>
+
+                              {hasNote && (
+                                <div style={{ background: 'var(--accent-emerald-light)', padding: '1.25rem 1.5rem', borderRadius: '16px', marginBottom: '2rem', fontSize: '0.9rem', borderLeft: '3px solid var(--accent-emerald)' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-emerald)', textTransform: 'uppercase' }}>
+                                    <FileText size={12} />
+                                    Reflection Note
+                                  </div>
+                                  <p style={{ fontStyle: 'italic' }}>"{notes[hadith.id]}"</p>
+                                </div>
+                              )}
+
+                              <div className="hadith-actions">
+                                <button className={`action-btn ${isBookmarked ? 'active' : ''}`} onClick={() => handleToggleBookmark(hadith)}>
+                                  <Bookmark size={15} fill={isBookmarked ? "currentColor" : "none"} />
+                                  <span>{isBookmarked ? 'Saved' : 'Save'}</span>
+                                </button>
+                                <button className={`action-btn ${hasNote ? 'active' : ''}`} onClick={() => handleOpenNoteModal(hadith)}>
+                                  <FileText size={15} />
+                                  <span>{hasNote ? 'Edit Note' : 'Add Note'}</span>
+                                </button>
+                                <button className="action-btn" onClick={() => handleShare(hadith)}>
+                                  <Share2 size={15} />
+                                  <span>Share</span>
+                                </button>
+                                <button className="primary-btn" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => handleSelectChapter(hadith.chapterId || 1, hadith.id)}>
+                                  Read in Context
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* 3. Single Chapter Reading View */}
+                {activeChapter && (
+                  <>
+                    <button 
+                      onClick={() => setActiveChapter(null)}
+                      className="glass-card"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.6rem 1.2rem',
+                        border: '1px solid var(--glass-border)',
+                        background: 'var(--glass-bg)',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.9rem',
+                        marginBottom: '2rem',
+                        transition: 'all 0.2s ease',
+                        width: 'fit-content'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-emerald)'}
+                      onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+                    >
+                      ← Back to Chapters
+                    </button>
+
+                    <div style={{ marginBottom: '4rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ color: 'var(--accent-gold)', fontSize: '0.8rem', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase' }}>
+                        Chapter {activeChapter.chapterNumber}
+                      </span>
+                      <h1 style={{ fontFamily: 'var(--font-arabic)', fontSize: '2.4rem', fontWeight: 400, color: 'var(--text-primary)', margin: 0 }}>
+                        {activeChapter.chapterArabic}
+                      </h1>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', fontStyle: 'italic', margin: 0 }}>
+                        {activeChapter.chapterEnglish}
+                      </p>
+                    </div>
+
+                    {loadingHadiths ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '6rem 0' }}>
+                        <motion.div 
+                          animate={{ rotate: 360 }} 
+                          transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                          style={{ display: 'inline-block', marginBottom: '1rem' }}
+                        >
+                          <Compass size={32} style={{ color: 'var(--accent-emerald)' }} />
+                        </motion.div>
+                        <p>Retrieving chapter scripture...</p>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+                        {chapterHadiths.map((hadith) => {
+                          const isBookmarked = bookmarkedIds.includes(hadith.id);
+                          const hasNote = !!notes[hadith.id];
+                          return (
+                            <div 
+                              key={hadith.id} 
+                              id={`hadith-card-${hadith.id}`}
+                              ref={el => { hadithRefs.current[hadith.id] = el; }}
+                              data-hadith-id={hadith.id}
+                            >
+                              <motion.article 
+                                className="hadith-glass-panel"
+                                initial={{ opacity: 0, y: 30 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true, margin: "-120px" }}
+                                transition={{ duration: 0.8 }}
+                              >
+                                {/* Hadith Metadata */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+                                  <span style={{ 
+                                    color: 'var(--accent-gold)', 
+                                    fontSize: '0.85rem', 
+                                    fontWeight: 500,
+                                    letterSpacing: '1px',
+                                    textTransform: 'uppercase'
+                                  }}>
+                                    Bab: {hadith.bab}
+                                  </span>
+                                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                    Hadith #{hadith.number}
+                                  </span>
+                                </div>
+
+                                {/* English Narrator Chain */}
+                                {hadith.englishNarrator && (
+                                  <div style={{ color: 'var(--accent-emerald)', fontSize: '0.9rem', fontStyle: 'italic', marginBottom: '1.2rem', lineHeight: 1.5 }}>
+                                    {hadith.englishNarrator}
+                                  </div>
+                                )}
+
+                                {/* Arabic text */}
+                                <div className="arabic" style={{ fontSize: 'var(--font-scale-arabic)', lineHeight: 1.9, marginBottom: '2.5rem', direction: 'rtl', textAlign: 'right' }}>
+                                  {hadith.arabic}
+                                </div>
+
+                                {/* English Translation */}
+                                <div className="translation" style={{ fontSize: 'var(--font-scale-translation)', lineHeight: 1.7, color: 'var(--text-primary)', marginBottom: '2.5rem' }}>
+                                  {hadith.translation}
+                                </div>
+
+                                {/* Note block if exists */}
+                                {hasNote && (
+                                  <div style={{ 
+                                    background: 'var(--accent-emerald-light)', 
+                                    padding: '1.25rem 1.5rem', 
+                                    borderRadius: '16px',
+                                    marginBottom: '2rem',
+                                    fontSize: '0.9rem',
+                                    borderLeft: '3px solid var(--accent-emerald)',
+                                    color: 'var(--text-primary)'
+                                  }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-emerald)', textTransform: 'uppercase' }}>
+                                      <FileText size={12} />
+                                      Personal Reflection Note
+                                    </div>
+                                    <p style={{ fontStyle: 'italic' }}>"{notes[hadith.id]}"</p>
+                                  </div>
+                                )}
+
+                                {/* Actions */}
+                                {!focusMode && (
+                                  <div className="hadith-actions">
+                                    <button 
+                                      className={`action-btn ${isBookmarked ? 'active' : ''}`}
+                                      onClick={() => handleToggleBookmark(hadith)}
+                                    >
+                                      <Bookmark size={15} fill={isBookmarked ? "currentColor" : "none"} />
+                                      <span>{isBookmarked ? 'Saved' : 'Save'}</span>
+                                    </button>
+
+                                    <button 
+                                      className={`action-btn ${hasNote ? 'active' : ''}`}
+                                      onClick={() => handleOpenNoteModal(hadith)}
+                                    >
+                                      <FileText size={15} />
+                                      <span>{hasNote ? 'Edit Note' : 'Add Note'}</span>
+                                    </button>
+
+                                    <button 
+                                      className="action-btn"
+                                      onClick={() => handleShare(hadith)}
+                                    >
+                                      <Share2 size={15} />
+                                      <span>Share</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </motion.article>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
               </motion.div>
             )}
 
-            {/* TAB 4: NARRATORS DIRECTORY (RUWAATS) */}
+            {/* TAB 3: NARRATORS DIRECTORY (RUWAATS) */}
             {currentTab === 'narrators' && (
               <motion.div
                 key="narrators"
@@ -579,7 +885,7 @@ const App: React.FC = () => {
                       <div 
                         key={narrator.id} 
                         className="narrator-card"
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', border: '1px solid var(--glass-border)' }}
                         onClick={() => setExpandedNarrator(isExpanded ? null : narrator.id)}
                       >
                         <div className="narrator-header">
@@ -622,7 +928,7 @@ const App: React.FC = () => {
               </motion.div>
             )}
 
-            {/* TAB 5: BOOKMARKS & NOTES */}
+            {/* TAB 4: BOOKMARKS & NOTES (MOMENTS) */}
             {currentTab === 'bookmarks' && (
               <motion.div
                 key="bookmarks"
@@ -639,32 +945,30 @@ const App: React.FC = () => {
 
                 {/* Bookmarks Section */}
                 <h3 style={{ color: 'var(--accent-gold)', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '0.85rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <Bookmark size={14} /> Bookmarks ({bookmarkedIds.length})
+                  <Bookmark size={14} /> Bookmarks ({bookmarkedHadiths.length})
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '4rem' }}>
-                  {bookmarkedIds.length > 0 ? (
-                    hadiths
-                      .filter(h => bookmarkedIds.includes(h.id))
-                      .map(h => (
-                        <div key={h.id} className="glass-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5rem' }}>
-                          <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => handleJumpToHadith(h.id)}>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--accent-gold)', marginBottom: '0.3rem' }}>
-                              {h.kitab} • Hadith #{h.number}
-                            </div>
-                            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                              {h.translation}
-                            </p>
+                  {bookmarkedHadiths.length > 0 ? (
+                    bookmarkedHadiths.map(h => (
+                      <div key={h.id} className="glass-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5rem', border: '1px solid var(--glass-border)' }}>
+                        <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => handleSelectChapter(h.chapterId || 1, h.id)}>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--accent-gold)', marginBottom: '0.3rem' }}>
+                            {h.kitab} • Hadith #{h.number}
                           </div>
-                          <button 
-                            onClick={() => handleToggleBookmark(h.id)}
-                            style={{ background: 'none', border: 'none', color: 'var(--accent-emerald)', cursor: 'pointer', padding: '0.5rem' }}
-                          >
-                            <Bookmark size={16} fill="currentColor" />
-                          </button>
+                          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {h.translation}
+                          </p>
                         </div>
-                      ))
+                        <button 
+                          onClick={() => handleToggleBookmark(h)}
+                          style={{ background: 'none', border: 'none', color: 'var(--accent-emerald)', cursor: 'pointer', padding: '0.5rem' }}
+                        >
+                          <Bookmark size={16} fill="currentColor" />
+                        </button>
+                      </div>
+                    ))
                   ) : (
-                    <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem 0', background: 'var(--input-bg)', borderRadius: '16px' }}>
+                    <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem 0', background: 'var(--input-bg)', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
                       <p>Your saved moments will appear here.</p>
                     </div>
                   )}
@@ -672,33 +976,31 @@ const App: React.FC = () => {
 
                 {/* Reflections Section */}
                 <h3 style={{ color: 'var(--accent-gold)', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '0.85rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <FileText size={14} /> Reflections Notes ({Object.keys(notes).length})
+                  <FileText size={14} /> Reflections Notes ({notesWithHadiths.length})
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {Object.keys(notes).length > 0 ? (
-                    hadiths
-                      .filter(h => !!notes[h.id])
-                      .map(h => (
-                        <div key={h.id} className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{ cursor: 'pointer' }} onClick={() => handleJumpToHadith(h.id)}>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--accent-gold)' }}>Hadith #{h.number}</span>
-                              <h4 style={{ fontSize: '0.95rem', fontWeight: 500 }}>{h.bab}</h4>
-                            </div>
-                            <button 
-                              onClick={() => handleOpenNoteModal(h)}
-                              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline' }}
-                            >
-                              Edit
-                            </button>
+                  {notesWithHadiths.length > 0 ? (
+                    notesWithHadiths.map(item => (
+                      <div key={item.hadith.id} className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid var(--glass-border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ cursor: 'pointer' }} onClick={() => handleSelectChapter(item.hadith.chapterId || 1, item.hadith.id)}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--accent-gold)' }}>Hadith #{item.hadith.number}</span>
+                            <h4 style={{ fontSize: '0.95rem', fontWeight: 500 }}>{item.hadith.bab}</h4>
                           </div>
-                          <div style={{ background: 'var(--accent-emerald-light)', padding: '1rem', borderRadius: '12px', fontSize: '0.9rem', fontStyle: 'italic', borderLeft: '3px solid var(--accent-emerald)' }}>
-                            "{notes[h.id]}"
-                          </div>
+                          <button 
+                            onClick={() => handleOpenNoteModal(item.hadith)}
+                            style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline' }}
+                          >
+                            Edit
+                          </button>
                         </div>
-                      ))
+                        <div style={{ background: 'var(--accent-emerald-light)', padding: '1rem', borderRadius: '12px', fontSize: '0.9rem', fontStyle: 'italic', borderLeft: '3px solid var(--accent-emerald)' }}>
+                          "{item.content}"
+                        </div>
+                      </div>
+                    ))
                   ) : (
-                    <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem 0', background: 'var(--input-bg)', borderRadius: '16px' }}>
+                    <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem 0', background: 'var(--input-bg)', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
                       <p>Your recorded reflections will appear here.</p>
                     </div>
                   )}
@@ -706,7 +1008,7 @@ const App: React.FC = () => {
               </motion.div>
             )}
 
-            {/* TAB 6: SETTINGS */}
+            {/* TAB 5: SETTINGS */}
             {currentTab === 'settings' && (
               <motion.div
                 key="settings"
@@ -721,7 +1023,7 @@ const App: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="glass-card" style={{ padding: '2rem' }}>
+                <div className="glass-card" style={{ padding: '2rem', border: '1px solid var(--glass-border)' }}>
                   {/* Theme Select */}
                   <div className="setting-row">
                     <div>
@@ -821,23 +1123,15 @@ const App: React.FC = () => {
           >
             <button 
               className={`nav-item-btn ${currentTab === 'home' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('home')}
+              onClick={() => handleTabClick('home')}
             >
               <Home size={18} />
               <span>Home</span>
             </button>
 
             <button 
-              className={`nav-item-btn ${currentTab === 'reader' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('reader')}
-            >
-              <BookOpen size={18} />
-              <span>Reader</span>
-            </button>
-
-            <button 
               className={`nav-item-btn ${currentTab === 'chapters' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('chapters')}
+              onClick={() => handleTabClick('chapters')}
             >
               <Menu size={18} />
               <span>Fahrs</span>
@@ -845,7 +1139,7 @@ const App: React.FC = () => {
 
             <button 
               className={`nav-item-btn ${currentTab === 'narrators' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('narrators')}
+              onClick={() => handleTabClick('narrators')}
             >
               <Users size={18} />
               <span>Ruwaat</span>
@@ -853,7 +1147,7 @@ const App: React.FC = () => {
 
             <button 
               className={`nav-item-btn ${currentTab === 'bookmarks' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('bookmarks')}
+              onClick={() => handleTabClick('bookmarks')}
             >
               <Bookmark size={18} />
               <span>Moments</span>
@@ -861,7 +1155,7 @@ const App: React.FC = () => {
 
             <button 
               className={`nav-item-btn ${currentTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('settings')}
+              onClick={() => handleTabClick('settings')}
             >
               <Settings size={18} />
               <span>Settings</span>
@@ -870,8 +1164,8 @@ const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Floating Focus Toggle (Shown only in Reader mode) */}
-      {currentTab === 'reader' && (
+      {/* Floating Focus Toggle (Shown only in chapter reading view) */}
+      {currentTab === 'chapters' && activeChapter && (
         <button
           onClick={() => setFocusMode(!focusMode)}
           style={{
