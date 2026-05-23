@@ -571,6 +571,156 @@ const App: React.FC = () => {
     );
   };
 
+  // Colorize Arabic hadith text: Prophet's speech (gold), Quranic verses (emerald), narration (default)
+  const colorizeHadithArabic = (text: string) => {
+    // Pattern: Prophet's speech is wrapped in ‏"‏ ... ‏"‏ and Quranic verses in ‏{‏ ... ‏}‏
+    // We split on these markers to create colored segments
+    const segments: { text: string; type: 'narration' | 'prophet' | 'quran' }[] = [];
+    let remaining = text;
+    
+    while (remaining.length > 0) {
+      // Find the next prophet quote or quran verse
+      const prophetStart = remaining.indexOf('\u200f"\u200f');
+      const quranStart = remaining.indexOf('\u200f{\u200f');
+      
+      let nextStart = -1;
+      let nextType: 'prophet' | 'quran' = 'prophet';
+      let endMarker = '';
+      
+      if (prophetStart !== -1 && (quranStart === -1 || prophetStart < quranStart)) {
+        nextStart = prophetStart;
+        nextType = 'prophet';
+        endMarker = '\u200f"\u200f';
+      } else if (quranStart !== -1) {
+        nextStart = quranStart;
+        nextType = 'quran';
+        endMarker = '\u200f}\u200f';
+      }
+      
+      if (nextStart === -1) {
+        // No more special markers, rest is narration
+        if (remaining.length > 0) {
+          segments.push({ text: remaining, type: 'narration' });
+        }
+        break;
+      }
+      
+      // Add narration before the marker
+      if (nextStart > 0) {
+        segments.push({ text: remaining.substring(0, nextStart), type: 'narration' });
+      }
+      
+      // Find the closing marker
+      const searchFrom = nextStart + endMarker.length;
+      const nextEnd = remaining.indexOf(endMarker, searchFrom);
+      
+      if (nextEnd !== -1) {
+        // Include the markers in the colored text
+        const markedText = remaining.substring(nextStart, nextEnd + endMarker.length);
+        segments.push({ text: markedText, type: nextType });
+        remaining = remaining.substring(nextEnd + endMarker.length);
+      } else {
+        // No closing marker found, treat rest as the type
+        segments.push({ text: remaining.substring(nextStart), type: nextType });
+        break;
+      }
+    }
+    
+    if (segments.length <= 1 && segments[0]?.type === 'narration') {
+      // Fallback: try simpler quote patterns "..." 
+      return colorizeArabicFallback(text);
+    }
+    
+    return (
+      <>
+        {segments.map((seg, i) => (
+          <span
+            key={i}
+            style={{
+              color: seg.type === 'prophet'
+                ? 'var(--accent-gold)'
+                : seg.type === 'quran'
+                  ? 'var(--accent-emerald)'
+                  : 'inherit',
+              fontWeight: seg.type !== 'narration' ? 600 : 'inherit'
+            }}
+          >
+            {seg.text}
+          </span>
+        ))}
+      </>
+    );
+  };
+
+  // Fallback colorizer for Arabic text using simple quote marks
+  const colorizeArabicFallback = (text: string) => {
+    // Try regular Arabic/English quotes
+    const regex = /("([^"]*)")|("([^"]*)")/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    
+    while ((match = regex.exec(text)) !== null) {
+      // Add narration before the quote
+      if (match.index > lastIndex) {
+        parts.push(<span key={`n${lastIndex}`}>{text.substring(lastIndex, match.index)}</span>);
+      }
+      // Add the quoted text as Prophet's speech
+      parts.push(
+        <span key={`p${match.index}`} style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>
+          {match[0]}
+        </span>
+      );
+      lastIndex = match.index + match[0].length;
+    }
+    
+    if (parts.length === 0) return text; // No quotes found at all
+    
+    // Add remaining narration
+    if (lastIndex < text.length) {
+      parts.push(<span key={`n${lastIndex}`}>{text.substring(lastIndex)}</span>);
+    }
+    
+    return <>{parts}</>;
+  };
+
+  // Colorize English hadith text: direct speech in gold, narrator context in default
+  const colorizeHadithEnglish = (text: string) => {
+    // English Prophet speech is typically in double quotes: "..."
+    // Also look for single-quoted speech within narrator text: '...'
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    
+    // Match double-quoted speech and Quranic references in parenthetical verse refs
+    const regex = /"([^"]+)"/g;
+    let match: RegExpExecArray | null;
+    
+    while ((match = regex.exec(text)) !== null) {
+      // Add narration before the quote
+      if (match.index > lastIndex) {
+        parts.push(
+          <span key={`n${lastIndex}`}>{text.substring(lastIndex, match.index)}</span>
+        );
+      }
+      // Add the quoted text as Prophet's speech (gold)
+      parts.push(
+        <span key={`p${match.index}`} style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>
+          {match[0]}
+        </span>
+      );
+      lastIndex = match.index + match[0].length;
+    }
+    
+    if (parts.length === 0) return text; // No quotes found
+    
+    // Add remaining narration
+    if (lastIndex < text.length) {
+      parts.push(<span key={`n${lastIndex}`}>{text.substring(lastIndex)}</span>);
+    }
+    
+    return <>{parts}</>;
+  };
+
   const handleToggleAudio = (hadith: Hadith) => {
     if (playingHadithId === hadith.id) {
       window.speechSynthesis.cancel();
@@ -1063,12 +1213,12 @@ const App: React.FC = () => {
                     <div>
                       {displayMode !== 'translation-only' && (
                         <p className="arabic" style={{ fontFamily: arabicFont, fontSize: '1.6rem', lineHeight: 1.9, marginBottom: '1.5rem', direction: 'rtl', textAlign: textAlignment }}>
-                          {dailyHadith.arabic}
+                          {colorizeHadithArabic(dailyHadith.arabic)}
                         </p>
                       )}
                       {displayMode !== 'arabic-only' && (
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', fontStyle: 'italic', marginBottom: '1.5rem', textAlign: language === 'arabic' ? 'right' : 'left' }}>
-                          "{dailyHadith.translation}"
+                          {colorizeHadithEnglish(dailyHadith.translation)}
                         </p>
                       )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1315,13 +1465,13 @@ const App: React.FC = () => {
                               <div className="hadith-text-layout">
                                 {displayMode !== 'translation-only' && (
                                   <div className="arabic" style={{ fontFamily: arabicFont, fontSize: 'var(--font-scale-arabic)', lineHeight: 1.9, marginBottom: '2rem', direction: 'rtl', textAlign: textAlignment }}>
-                                    {highlightText(hadith.arabic, committedSearchQuery)}
+                                    {committedSearchQuery ? highlightText(hadith.arabic, committedSearchQuery) : colorizeHadithArabic(hadith.arabic)}
                                   </div>
                                 )}
 
                                 {displayMode !== 'arabic-only' && (
                                   <div className="translation" style={{ fontSize: 'var(--font-scale-translation)', lineHeight: 1.7, color: 'var(--text-primary)', marginBottom: '2rem', textAlign: language === 'arabic' ? 'right' : 'left' }}>
-                                    {highlightText(hadith.translation, committedSearchQuery)}
+                                    {committedSearchQuery ? highlightText(hadith.translation, committedSearchQuery) : colorizeHadithEnglish(hadith.translation)}
                                   </div>
                                 )}
                               </div>
@@ -1488,14 +1638,14 @@ const App: React.FC = () => {
                                       {/* Arabic text */}
                                       {displayMode !== 'translation-only' && (
                                         <div className="arabic" style={{ fontFamily: arabicFont, textAlign: textAlignment, fontSize: 'var(--font-scale-arabic)', lineHeight: 1.9, marginBottom: '2.5rem', direction: 'rtl' }}>
-                                          {hadith.arabic}
+                                          {colorizeHadithArabic(hadith.arabic)}
                                         </div>
                                       )}
 
                                       {/* English Translation */}
                                       {displayMode !== 'arabic-only' && (
                                         <div className="translation" style={{ textAlign: language === 'arabic' ? 'right' : 'left', fontSize: 'var(--font-scale-translation)', lineHeight: 1.7, color: 'var(--text-primary)', marginBottom: '2.5rem' }}>
-                                          {hadith.translation}
+                                          {colorizeHadithEnglish(hadith.translation)}
                                         </div>
                                       )}
                                     </div>
@@ -1640,14 +1790,14 @@ const App: React.FC = () => {
                                           {/* Arabic text */}
                                           {displayMode !== 'translation-only' && (
                                             <div className="arabic" style={{ fontFamily: arabicFont, textAlign: textAlignment, fontSize: 'var(--font-scale-arabic)', lineHeight: 1.9, marginBottom: '2.5rem', direction: 'rtl' }}>
-                                              {hadith.arabic}
+                                              {colorizeHadithArabic(hadith.arabic)}
                                             </div>
                                           )}
 
                                           {/* English Translation */}
                                           {displayMode !== 'arabic-only' && (
                                             <div className="translation" style={{ textAlign: language === 'arabic' ? 'right' : 'left', fontSize: 'var(--font-scale-translation)', lineHeight: 1.7, color: 'var(--text-primary)', marginBottom: '2.5rem' }}>
-                                              {hadith.translation}
+                                              {colorizeHadithEnglish(hadith.translation)}
                                             </div>
                                           )}
                                         </div>
