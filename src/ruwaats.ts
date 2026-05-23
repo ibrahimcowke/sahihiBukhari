@@ -4,7 +4,9 @@ export interface Narrator {
   arabicName: string;
   totalNarrations: number;
   title: string;
+  titleArabic: string;
   bio: string;
+  bioArabic: string;
 }
 
 export const ruwaatsData: Narrator[] = [
@@ -14,7 +16,9 @@ export const ruwaatsData: Narrator[] = [
     arabicName: "أبو هريرة الدوسي",
     totalNarrations: 5374,
     title: "The Companion of Outstanding Memory",
-    bio: "He spent only three years in the company of the Prophet Muhammad (ﷺ), but possessed an extraordinary memory. He dedicated his entire life to transmitting hadiths, serving as a preservation library for the early Muslim community."
+    titleArabic: "حافظ الصحابة ذو الذاكرة الفريدة",
+    bio: "He spent only three years in the company of the Prophet Muhammad (ﷺ), but possessed an extraordinary memory. He dedicated his entire life to transmitting hadiths, serving as a preservation library for the early Muslim community.",
+    bioArabic: "رافق النبي ﷺ لثلاث سنوات فقط، ولكنه كان يمتلك ذاكرة استثنائية لحفظ الحديث النبوي الشريف. كرس حياته لنقل السنن والآثار وحفظها للأمة الإسلامية."
   },
   {
     id: 2,
@@ -22,7 +26,9 @@ export const ruwaatsData: Narrator[] = [
     arabicName: "عائشة بنت أبي بكر",
     totalNarrations: 2210,
     title: "Mother of the Believers",
-    bio: "The beloved wife of the Prophet (ﷺ), renowned for her sharp intellect, legal scholarship, and eloquence. She taught hundreds of companions and is the source of many personal, familial, and ritual directives of Islam."
+    titleArabic: "أم المؤمنين والفقيهة المحدثة",
+    bio: "The beloved wife of the Prophet (ﷺ), renowned for her sharp intellect, legal scholarship, and eloquence. She taught hundreds of companions and is the source of many personal, familial, and ritual directives of Islam.",
+    bioArabic: "زوجة النبي ﷺ الأحب، اشتهرت بالذكاء الوقاد والاجتهاد الفقهي والبلاغة. علّمت مئات التابعين والصحابة وكانت مرجعًا للأحكام الأسرية والعبادات."
   },
   {
     id: 3,
@@ -30,7 +36,9 @@ export const ruwaatsData: Narrator[] = [
     arabicName: "أنس بن مالك",
     totalNarrations: 2286,
     title: "The Servant of the Messenger",
-    bio: "He served the Prophet Muhammad (ﷺ) personally for ten years in Madinah. This close access allowed him to narrate detailed accounts of the Prophet's character, daily conduct, and home environment."
+    titleArabic: "خادم رسول الله ﷺ المقرب",
+    bio: "He served the Prophet Muhammad (ﷺ) personally for ten years in Madinah. This close access allowed him to narrate detailed accounts of the Prophet's character, daily conduct, and home environment.",
+    bioArabic: "خدم النبي محمد ﷺ لعشر سنوات كاملة في المدينة المنورة، مما أتاح له الفرصة لمعايشة أخلاق النبي ونقل تفاصيل حياته اليومية وسيرته العطرة."
   },
   {
     id: 4,
@@ -38,7 +46,9 @@ export const ruwaatsData: Narrator[] = [
     arabicName: "عبد الله بن عمر",
     totalNarrations: 2630,
     title: "The Scholar of Absolute Emulation",
-    bio: "Son of the second Caliph, Umar ibn al-Khattab. He was famous for his strict adherence to the exact practices of the Prophet (ﷺ), recording actions with meticulous details and teaching the early generation of Madinan scholars."
+    titleArabic: "العالم المقتدي الشديد بالسنة",
+    bio: "Son of the second Caliph, Umar ibn al-Khattab. He was famous for his strict adherence to the exact practices of the Prophet (ﷺ), recording actions with meticulous details and teaching the early generation of Madinan scholars.",
+    bioArabic: "ابن الفاروق عمر بن الخطاب، اشتهر باتباعه الدقيق والتفصيلي لكل أفعال النبي ﷺ، ونقل الأحاديث بدقة بالغة وتعليم فقهاء المدينة."
   },
   {
     id: 5,
@@ -46,6 +56,8 @@ export const ruwaatsData: Narrator[] = [
     arabicName: "جابر بن عبد الله",
     totalNarrations: 1540,
     title: "The Martyr's Son & Madinan Teacher",
-    bio: "Participated in many campaigns and was present at the Pledge of Ridwan. He traveled extensively in search of single hadiths to verify them, eventually setting up a famous educational circle in the Prophet's Mosque."
+    titleArabic: "صاحب حلقة الفتيا في المسجد النبوي",
+    bio: "Participated in many campaigns and was present at the Pledge of Ridwan. He traveled extensively in search of single hadiths to verify them, eventually setting up a famous educational circle in the Prophet's Mosque.",
+    bioArabic: "شارك في العديد من الغزوات وكان ممن شهد بيعة الرضوان. ارتحل طويلاً للتحقق من الأحاديث وأسس حلقة علمية كبرى بالمسجد النبوي الشريف."
   }
 ];

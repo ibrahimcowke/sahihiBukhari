@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@300;400;500;600;700&family=Scheherazade+New:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Cairo:wght@300;400;500;600;700;800;900&family=Tajawal:wght@300;400;500;700;900&family=Inter:wght@300;400;500;600;700&family=Scheherazade+New:wght@400;700&family=Lateef&display=swap');
 
 :root {
   /* Night Forest Theme (Default Dark) */
@@ -22,6 +22,8 @@
   /* Font Scaling Variables */
   --font-scale-arabic: 32px;
   --font-scale-translation: 17px;
+  
+  --welcome-bg: rgba(8, 13, 10, 0.7);
 }
 
 [data-theme='paper'] {
@@ -37,6 +39,8 @@
   --glass-border: rgba(0, 0, 0, 0.05);
   --glass-shadow: rgba(31, 122, 99, 0.05);
   --input-bg: rgba(255, 255, 255, 0.6);
+  
+  --welcome-bg: rgba(244, 248, 245, 0.85);
 }
 
 [data-theme='sepia'] {
@@ -52,6 +56,59 @@
   --glass-border: rgba(56, 45, 32, 0.06);
   --glass-shadow: rgba(56, 45, 32, 0.05);
   --input-bg: rgba(255, 255, 255, 0.4);
+  
+  --welcome-bg: rgba(239, 235, 222, 0.85);
+}
+
+[data-theme='indigo'] {
+  /* Royal Indigo Theme */
+  --bg-primary: #0A0D1A;
+  --bg-secondary: #12162B;
+  --text-primary: #E2E8F0;
+  --text-secondary: #94A3B8;
+  --accent-emerald: #6366F1;
+  --accent-emerald-light: rgba(99, 102, 241, 0.15);
+  --accent-gold: #EAB308;
+  --glass-bg: rgba(18, 22, 43, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: rgba(0, 0, 0, 0.4);
+  --input-bg: rgba(0, 0, 0, 0.3);
+  
+  --welcome-bg: rgba(10, 13, 26, 0.7);
+}
+
+[data-theme='emerald'] {
+  /* Emerald Sanctuary Theme */
+  --bg-primary: #04140D;
+  --bg-secondary: #0A241A;
+  --text-primary: #F0FDF4;
+  --text-secondary: #A7F3D0;
+  --accent-emerald: #10B981;
+  --accent-emerald-light: rgba(16, 185, 129, 0.15);
+  --accent-gold: #F59E0B;
+  --glass-bg: rgba(10, 36, 26, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: rgba(0, 0, 0, 0.45);
+  --input-bg: rgba(0, 0, 0, 0.3);
+  
+  --welcome-bg: rgba(4, 20, 13, 0.75);
+}
+
+[data-theme='clay'] {
+  /* Clay Tablet Theme - Earthy terracotta & sandstone */
+  --bg-primary: #B87B52;
+  --bg-secondary: #A0643D;
+  --text-primary: #381E10;
+  --text-secondary: #5E3922;
+  --accent-emerald: #381E10;
+  --accent-emerald-light: rgba(56, 30, 16, 0.08);
+  --accent-gold: #824116;
+  --glass-bg: rgba(235, 200, 175, 0.45);
+  --glass-border: rgba(94, 57, 34, 0.2);
+  --glass-shadow: rgba(56, 30, 16, 0.15);
+  --input-bg: rgba(242, 210, 187, 0.55);
+  
+  --welcome-bg: rgba(222, 191, 169, 0.95);
 }
 
 * {
@@ -258,6 +315,159 @@ body {
   background: var(--accent-emerald-light);
   font-weight: 500;
 }
+
+/* Welcome Header Styles with radial-gradient legibility masking */
+.welcome-header {
+  text-align: center;
+  margin-bottom: 4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem 2.5rem;
+  border-radius: 28px;
+  background: radial-gradient(circle, var(--welcome-bg) 0%, var(--welcome-bg) 55%, transparent 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  width: 100%;
+  max-width: 650px;
+  margin: 0 auto 3rem auto;
+}
+
+.welcome-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--accent-emerald);
+}
+
+.welcome-tag span {
+  font-size: 0.8rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.welcome-header h1 {
+  font-family: var(--font-arabic);
+  font-size: 3rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.welcome-header p {
+  color: var(--text-secondary);
+  font-size: 0.98rem;
+  max-width: 460px;
+  line-height: 1.7;
+}
+
+/* Clay theme customizations for welcome-header */
+[data-theme='clay'] .welcome-header h1 {
+  color: #381E10;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+[data-theme='clay'] .welcome-header p {
+  color: #381E10;
+  font-weight: 500;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4);
+}
+
+[data-theme='clay'] .welcome-tag span {
+  color: #824116;
+  font-weight: 700;
+}
+
+/* Chapter Heading Styles & Legibility Improvements */
+.chapter-header {
+  margin-bottom: 4rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.chapter-meta {
+  color: var(--accent-gold);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Default Dark/Saturated Themes: Night, Indigo, Emerald (White fonts for high contrast) */
+.chapter-title-arabic {
+  font-family: var(--font-arabic);
+  font-size: 2.6rem;
+  font-weight: 400;
+  color: #ffffff;
+  margin: 0;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.chapter-title-english {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 1.15rem;
+  font-style: italic;
+  margin: 0;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.chapter-card h3 {
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.chapter-card .alternative-title {
+  color: rgba(255, 255, 255, 0.85) !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Light Theme Overrides (Paper, Sepia) - Keep text dark to match the light theme */
+[data-theme='paper'] .chapter-title-arabic,
+[data-theme='paper'] .chapter-card h3 {
+  color: var(--text-primary) !important;
+  text-shadow: none;
+}
+
+[data-theme='paper'] .chapter-title-english {
+  color: var(--text-secondary) !important;
+  text-shadow: none;
+}
+
+[data-theme='paper'] .chapter-card .alternative-title {
+  color: var(--accent-emerald) !important;
+  text-shadow: none;
+}
+
+[data-theme='sepia'] .chapter-title-arabic,
+[data-theme='sepia'] .chapter-card h3 {
+  color: var(--text-primary) !important;
+  text-shadow: none;
+}
+
+[data-theme='sepia'] .chapter-title-english {
+  color: var(--text-secondary) !important;
+  text-shadow: none;
+}
+
+[data-theme='sepia'] .chapter-card .alternative-title {
+  color: var(--accent-emerald) !important;
+  text-shadow: none;
+}
+
+/* Clay Theme Customizations (Clay is terracotta, white text stands out beautifully) */
+[data-theme='clay'] .chapter-title-arabic,
+[data-theme='clay'] .chapter-title-english,
+[data-theme='clay'] .chapter-card h3,
+[data-theme='clay'] .chapter-card .alternative-title {
+  color: #ffffff !important;
+  text-shadow: 0 2px 5px rgba(56, 30, 16, 0.6);
+}
+
 
 /* Home Dashboard Styles */
 .dashboard-grid {
@@ -528,3 +738,341 @@ body {
   background: var(--glass-border);
   border-radius: 99px;
 }
+
+[data-theme='clay'] .nature-bg-overlay {
+  background-image: url('./assets/clay_texture.png');
+  opacity: 0.82;
+  mix-blend-mode: multiply;
+}
+
+[data-theme='clay'] .arabic {
+  color: #381E10;
+  text-shadow: -1px -1px 1px rgba(0, 0, 0, 0.65), 1px 1px 1px rgba(255, 255, 255, 0.35);
+  font-weight: 500;
+}
+
+[data-theme='clay'] h1,
+[data-theme='clay'] h2,
+[data-theme='clay'] h3,
+[data-theme='clay'] h4 {
+  color: #381E10;
+  text-shadow: -1px -1px 1px rgba(0, 0, 0, 0.5), 1px 1px 1px rgba(255, 255, 255, 0.3);
+}
+
+[data-theme='clay'] .hadith-glass-panel,
+[data-theme='clay'] .glass-card,
+[data-theme='clay'] .stat-card,
+[data-theme='clay'] .daily-reflection-card,
+[data-theme='clay'] .narrator-card {
+  background: #DEBFA9;
+  border: 1px solid #C9A48B;
+  box-shadow: 
+    inset 2px 2px 5px rgba(255, 255, 255, 0.35),
+    inset -2px -2px 5px rgba(0, 0, 0, 0.15),
+    0 12px 35px rgba(56, 30, 16, 0.18);
+  color: #381E10;
+}
+
+[data-theme='clay'] .bottom-nav-bar {
+  background: #E5C9B5;
+  border-color: #C9A48B;
+  border-style: solid;
+  box-shadow: 
+    inset 1px 1px 3px rgba(255, 255, 255, 0.4),
+    0 12px 42px rgba(56, 30, 16, 0.22);
+}
+
+[data-theme='clay'] .nav-item-btn.active {
+  background: rgba(56, 30, 16, 0.15);
+  color: #381E10;
+}
+
+[data-theme='clay'] .primary-btn {
+  background: #824116;
+  color: #FFF6F0;
+  box-shadow: 0 4px 12px rgba(130, 65, 22, 0.3);
+}
+
+[data-theme='clay'] .action-btn {
+  color: #5E3922;
+}
+
+[data-theme='clay'] .action-btn:hover {
+  background: rgba(56, 30, 16, 0.08);
+  color: #381E10;
+}
+
+[data-theme='clay'] .action-btn.active {
+  color: #824116;
+}
+
+/* Wide Reader layout & Bilingual landscape reading layout styles */
+.reading-container.reader-wide {
+  max-width: 1080px;
+  width: 100%;
+}
+
+.hadith-text-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  .hadith-text-layout {
+    flex-direction: row-reverse;
+    gap: 3.5rem;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  
+  .hadith-text-layout .arabic,
+  .hadith-text-layout .translation {
+    flex: 1;
+    margin-bottom: 0 !important;
+  }
+  
+  /* Standard side-by-side alignment: translation on the left, arabic on the right */
+  .hadith-text-layout .translation {
+    text-align: left !important;
+  }
+  .hadith-text-layout .arabic {
+    text-align: right !important;
+  }
+}
+
+/* Scrollable container for text box in page view */
+.hadith-scroll-box {
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+/* Custom scrollbar for the reading box */
+.hadith-scroll-box::-webkit-scrollbar {
+  width: 6px;
+}
+
+.hadith-scroll-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hadith-scroll-box::-webkit-scrollbar-thumb {
+  background: var(--glass-border);
+  border-radius: 99px;
+}
+
+.hadith-scroll-box::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-emerald);
+}
+
+/* Sidebar Nav Brand Header & Containers */
+.nav-brand-header {
+  display: none;
+}
+
+.nav-items-container {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  width: 100%;
+}
+
+@media (min-width: 769px) {
+  /* Transform bottom-nav-bar into a sidebar on desktop */
+  .bottom-nav-bar {
+    position: fixed !important;
+    bottom: 0 !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    transform: none !important;
+    height: 100vh !important;
+    width: 280px !important;
+    border-radius: 0 !important;
+    border-width: 0 1px 0 0 !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 3rem 2rem !important;
+    gap: 2.5rem !important;
+  }
+
+  /* Right-align sidebar in RTL Arabic mode */
+  .app-root[dir='rtl'] .bottom-nav-bar {
+    left: auto !important;
+    right: 0 !important;
+    border-width: 0 0 0 1px !important;
+  }
+
+  .nav-brand-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--accent-gold);
+    width: 100%;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .nav-brand-header h3 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-shadow: none !important;
+  }
+
+  .nav-items-container {
+    flex-direction: column !important;
+    gap: 1rem !important;
+    align-items: stretch !important;
+    flex: 1;
+  }
+
+  .nav-item-btn {
+    flex-direction: row !important;
+    gap: 1rem !important;
+    padding: 0.8rem 1.2rem !important;
+    border-radius: 14px !important;
+    width: 100% !important;
+    justify-content: flex-start !important;
+    font-size: 0.95rem !important;
+  }
+
+  .nav-item-btn span {
+    font-size: 0.95rem !important;
+  }
+
+  /* Shift the main container to center in the remaining screen space */
+  .reading-container {
+    padding-left: calc(280px + 3rem) !important;
+    max-width: calc(1080px + 280px + 3rem) !important;
+  }
+
+  .app-root[dir='rtl'] .reading-container {
+    padding-left: 1.5rem !important;
+    padding-right: calc(280px + 3rem) !important;
+  }
+}
+
+/* Mobile Responsive Adjustments for Small Screens */
+@media (max-width: 600px) {
+  .setting-row {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 1rem;
+  }
+  
+  .slider-container {
+    width: 100% !important;
+  }
+  
+  /* Make settings buttons wrap nicely */
+  .setting-row > div:last-child {
+    display: flex;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Prevent floating bottom bar overflow on extra narrow devices */
+  .bottom-nav-bar {
+    width: 92% !important;
+    padding: 0.35rem 0.5rem !important;
+    gap: 0.25rem !important;
+    bottom: 1rem !important;
+  }
+  
+  .nav-item-btn {
+    padding: 0.4rem 0.5rem !important;
+    gap: 0.2rem !important;
+    font-size: 0.7rem !important;
+  }
+  
+  .nav-item-btn svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+  
+  /* Prevent actions buttons from overflowing in Hadith cards */
+  .hadith-actions {
+    justify-content: space-between !important;
+    gap: 0.4rem !important;
+  }
+  
+  .action-btn {
+    padding: 0.4rem 0.5rem !important;
+    gap: 0.25rem !important;
+    font-size: 0.78rem !important;
+  }
+  
+  /* Adjust margins on very small devices */
+  .reading-container {
+    padding-top: 2rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+
+/* Quick Search Layout and Mobile Adaptation */
+.quick-search-form {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.quick-search-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.random-discover-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.4rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 12px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.random-discover-btn:hover {
+  background: rgba(212, 175, 55, 0.1);
+  transform: translateY(-1px);
+}
+
+.random-discover-btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 600px) {
+  .quick-search-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 480px) {
+  .quick-search-buttons {
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  .random-discover-btn {
+    width: 100%;
+    padding: 0.8rem;
+  }
+}
+
+
+

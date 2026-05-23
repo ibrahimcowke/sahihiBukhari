@@ -1,6 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Hadith } from './types';
 
+export interface DbHadith {
+  id: number;
+  number: string;
+  arabic: string;
+  translation: string;
+  kitab: string;
+  bab: string;
+  kitab_arabic?: string;
+  kitab_english?: string;
+  bab_arabic?: string;
+  bab_english?: string;
+  english_narrator?: string;
+  heading_arabic?: string;
+  heading_english?: string;
+}
+
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
@@ -53,6 +70,34 @@ const saveLocalCachedHadith = (hadith: Hadith) => {
   }
 };
 
+const resolveHadithRow = (val: unknown): Partial<DbHadith> | null | undefined => {
+  if (Array.isArray(val)) {
+    return val[0] as Partial<DbHadith>;
+  }
+  return val as Partial<DbHadith>;
+};
+
+// Database API with Local Fallbacks
+// Helper to map DB row to Hadith type
+export function mapDbHadith(row: Partial<DbHadith> | null | undefined): Hadith {
+  if (!row) return row as unknown as Hadith;
+  return {
+    id: row.id || 0,
+    number: row.number || '',
+    arabic: row.arabic || '',
+    translation: row.translation || '',
+    kitab: row.kitab || '',
+    bab: row.bab || '',
+    kitabArabic: row.kitab_arabic || row.kitab,
+    kitabEnglish: row.kitab_english || row.kitab,
+    babArabic: row.bab_arabic || row.bab,
+    babEnglish: row.bab_english || row.bab,
+    englishNarrator: row.english_narrator || '',
+    headingArabic: row.heading_arabic || '',
+    headingEnglish: row.heading_english || ''
+  };
+}
+
 // Database API with Local Fallbacks
 export const db = {
   // Ensure hadith is cached in the DB to satisfy foreign keys
@@ -75,7 +120,11 @@ export const db = {
               kitab: hadith.kitab,
               bab: hadith.bab,
               arabic: hadith.arabic,
-              translation: hadith.translation
+              translation: hadith.translation,
+              kitab_arabic: hadith.kitabArabic,
+              kitab_english: hadith.kitabEnglish,
+              bab_arabic: hadith.babArabic,
+              bab_english: hadith.babEnglish
             }]);
           if (insError) {
             console.error("Failed to cache hadith in Supabase:", insError);
@@ -99,8 +148,8 @@ export const db = {
         
         if (!error && data) {
           return data
-            .map(item => item.hadiths)
-            .filter(Boolean) as any as Hadith[];
+            .map(item => mapDbHadith(resolveHadithRow(item.hadiths)))
+            .filter(Boolean) as Hadith[];
         }
         console.error("Error fetching bookmarked hadiths from Supabase:", error);
       } catch (err) {
@@ -123,7 +172,7 @@ export const db = {
         if (!error && data) {
           return data
             .map(item => ({
-              hadith: item.hadiths as any as Hadith,
+              hadith: mapDbHadith(resolveHadithRow(item.hadiths)),
               content: item.content
             }))
             .filter(item => !!item.hadith);
@@ -308,7 +357,7 @@ export const db = {
             .eq('id', hadithId)
             .maybeSingle();
           if (!error && data) {
-            return data as Hadith;
+            return mapDbHadith(data);
           }
         } catch (err) {
           console.error("Error fetching cached hadith for progress:", err);
