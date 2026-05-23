@@ -23,7 +23,8 @@ import {
   ArrowUpLeft,
   Database,
   Volume2,
-  VolumeX
+  VolumeX,
+  Copy
 } from 'lucide-react';
 import { db, isSupabaseConfigured } from './supabaseClient';
 import { ruwaatsData } from './ruwaats';
@@ -144,7 +145,9 @@ const translations = {
     nextChapterBtn: "Next Chapter",
     prevChapterBtn: "Previous Chapter",
     listen: "Listen",
-    stop: "Stop"
+    stop: "Stop",
+    copyArabic: "Copy Arabic",
+    copyEnglish: "Copy English"
   },
   arabic: {
     home: "الرئيسية",
@@ -256,7 +259,9 @@ const translations = {
     nextChapterBtn: "الباب التالي",
     prevChapterBtn: "الباب السابق",
     listen: "استمع",
-    stop: "إيقاف"
+    stop: "إيقاف",
+    copyArabic: "نسخ العربي",
+    copyEnglish: "نسخ الترجمة"
   }
 };
 
@@ -291,6 +296,7 @@ const App: React.FC = () => {
   const [focusMode, setFocusMode] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [playingHadithId, setPlayingHadithId] = useState<number | null>(null);
+  const [committedSearchQuery, setCommittedSearchQuery] = useState('');
 
   // Settings state
   const [arabicFontSize, setArabicFontSize] = useState<number>(() => {
@@ -302,7 +308,7 @@ const App: React.FC = () => {
     return saved ? parseInt(saved, 10) : 17;
   });
   const [language, setLanguage] = useState<'english' | 'arabic'>(() => {
-    return (localStorage.getItem('ummuhat_language') as 'english' | 'arabic') || 'english';
+    return (localStorage.getItem('ummuhat_language') as 'english' | 'arabic') || 'arabic';
   });
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('ummuhat_theme') as Theme) || 'night';
@@ -370,11 +376,20 @@ const App: React.FC = () => {
         const progressHadith = await db.getReadingProgressHadith();
         setLastReadHadith(progressHadith);
 
-        // 5. Fetch default reflection from API (Hadith #1)
+        // 5. Fetch date-based dynamic Hadith of the Day
         try {
-          const firstChapterHadiths = await api.fetchHadithsByChapter(1);
-          if (firstChapterHadiths && firstChapterHadiths.length > 0) {
-            setDailyHadith(firstChapterHadiths[0]);
+          if (data && data.length > 0) {
+            const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+            const targetChapterIndex = dayOfYear % data.length;
+            const targetChapter = data[targetChapterIndex];
+            
+            if (targetChapter) {
+              const hadithsList = await api.fetchHadithsByChapter(targetChapter.id);
+              if (hadithsList && hadithsList.length > 0) {
+                const targetHadithIndex = dayOfYear % hadithsList.length;
+                setDailyHadith(hadithsList[targetHadithIndex]);
+              }
+            }
           }
         } catch (apiErr) {
           console.warn("Could not load dynamic daily reflection hadith", apiErr);
@@ -518,6 +533,43 @@ const App: React.FC = () => {
 
     return () => observer.disconnect();
   }, [chapterHadiths, currentTab, activeChapter]);
+
+  const highlightText = (text: string, search: string) => {
+    if (!search || !search.trim()) return text;
+    
+    const words = search
+      .split(/\s+/)
+      .map(w => w.trim())
+      .filter(w => w.length >= 2);
+      
+    if (words.length === 0) return text;
+    const escapedWords = words.map(w => w.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+    const regex = new RegExp(`(${escapedWords.join('|')})`, 'gi');
+    const parts = text.split(regex);
+    
+    return (
+      <>
+        {parts.map((part, i) => 
+          regex.test(part) ? (
+            <mark 
+              key={i} 
+              style={{ 
+                backgroundColor: 'rgba(210, 183, 115, 0.35)',
+                color: 'inherit',
+                padding: '0 2px',
+                borderRadius: '4px',
+                fontWeight: 600
+              }}
+            >
+              {part}
+            </mark>
+          ) : (
+            part
+          )
+        )}
+      </>
+    );
+  };
 
   const handleToggleAudio = (hadith: Hadith) => {
     if (playingHadithId === hadith.id) {
@@ -665,6 +717,16 @@ const App: React.FC = () => {
     triggerToast(t.copied);
   };
 
+  const handleCopyArabic = (hadith: Hadith) => {
+    navigator.clipboard.writeText(hadith.arabic);
+    triggerToast(language === 'arabic' ? 'تم نسخ النص العربي فقط' : 'Arabic text copied to clipboard');
+  };
+
+  const handleCopyEnglish = (hadith: Hadith) => {
+    navigator.clipboard.writeText(hadith.translation);
+    triggerToast(language === 'arabic' ? 'تم نسخ الترجمة الإنجليزية فقط' : 'English translation copied to clipboard');
+  };
+
   // Select chapter and load hadiths
   const handleSelectChapter = async (chapterId: number, targetHadithId?: number, selectLastHadith?: boolean, direction?: number) => {
     let ch = chapters.find(c => c.id === chapterId);
@@ -768,22 +830,25 @@ const App: React.FC = () => {
     }
   };
   // Global Search Functions
-  const handleSearch = async (e?: React.FormEvent) => {
+  const handleSearch = async (e?: React.FormEvent, customQuery?: string) => {
     if (e) e.preventDefault();
-    if (!searchQuery.trim()) {
+    const activeQuery = (customQuery ?? searchQuery).trim();
+    if (!activeQuery) {
       setSearchActive(false);
       setSearchResults([]);
+      setCommittedSearchQuery('');
       return;
     }
 
     setSearching(true);
     setSearchActive(true);
+    setCommittedSearchQuery(activeQuery);
     setActiveChapter(null); // Return to list/search view inside chapters tab
     setShowToolbar(true);
     setCurrentTab('chapters');
 
     try {
-      const results = await api.searchHadiths(searchQuery);
+      const results = await api.searchHadiths(activeQuery);
       setSearchResults(results);
     } catch (err) {
       console.error("Search failed", err);
@@ -947,6 +1012,45 @@ const App: React.FC = () => {
                       </button>
                     </div>
                   </form>
+
+                  {/* Popular Discovery Tags */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1.2rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginRight: language === 'arabic' ? '0' : '0.5rem', marginLeft: language === 'arabic' ? '0.5rem' : '0' }}>
+                      {language === 'arabic' ? 'مواضيع شائعة:' : 'Popular Topics:'}
+                    </span>
+                    {[
+                      { en: 'Faith', ar: 'إيمان' },
+                      { en: 'Prayer', ar: 'صلاة' },
+                      { en: 'Charity', ar: 'صدقة' },
+                      { en: 'Knowledge', ar: 'علم' },
+                      { en: 'Intention', ar: 'نية' },
+                      { en: 'Good Character', ar: 'أخلاق' }
+                    ].map((topic) => (
+                      <button
+                        key={topic.en}
+                        type="button"
+                        onClick={() => {
+                          const query = language === 'arabic' ? topic.ar : topic.en;
+                          setSearchQuery(query);
+                          handleSearch(undefined, query);
+                        }}
+                        className="glass-card"
+                        style={{
+                          padding: '0.35rem 0.8rem',
+                          fontSize: '0.75rem',
+                          borderRadius: '8px',
+                          color: 'var(--accent-emerald)',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          border: '1px solid var(--glass-border)',
+                          background: 'transparent',
+                          fontFamily: language === 'arabic' ? 'var(--font-arabic)' : 'inherit'
+                        }}
+                      >
+                        {language === 'arabic' ? topic.ar : topic.en}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Curated Daily Hadith Reflection */}
@@ -1211,13 +1315,13 @@ const App: React.FC = () => {
                               <div className="hadith-text-layout">
                                 {displayMode !== 'translation-only' && (
                                   <div className="arabic" style={{ fontFamily: arabicFont, fontSize: 'var(--font-scale-arabic)', lineHeight: 1.9, marginBottom: '2rem', direction: 'rtl', textAlign: textAlignment }}>
-                                    {hadith.arabic}
+                                    {highlightText(hadith.arabic, committedSearchQuery)}
                                   </div>
                                 )}
 
                                 {displayMode !== 'arabic-only' && (
                                   <div className="translation" style={{ fontSize: 'var(--font-scale-translation)', lineHeight: 1.7, color: 'var(--text-primary)', marginBottom: '2rem', textAlign: language === 'arabic' ? 'right' : 'left' }}>
-                                    {hadith.translation}
+                                    {highlightText(hadith.translation, committedSearchQuery)}
                                   </div>
                                 )}
                               </div>
@@ -1253,6 +1357,14 @@ const App: React.FC = () => {
                                 <button className={`action-btn ${playingHadithId === hadith.id ? 'active' : ''}`} onClick={() => handleToggleAudio(hadith)}>
                                   {playingHadithId === hadith.id ? <VolumeX size={15} /> : <Volume2 size={15} />}
                                   <span>{playingHadithId === hadith.id ? t.stop : t.listen}</span>
+                                </button>
+                                <button className="action-btn" onClick={() => handleCopyArabic(hadith)}>
+                                  <Copy size={15} />
+                                  <span>{t.copyArabic}</span>
+                                </button>
+                                <button className="action-btn" onClick={() => handleCopyEnglish(hadith)}>
+                                  <Copy size={15} />
+                                  <span>{t.copyEnglish}</span>
                                 </button>
                                 <button className="action-btn" onClick={() => handleShare(hadith)}>
                                   <Share2 size={15} />
@@ -1437,6 +1549,22 @@ const App: React.FC = () => {
 
                                         <button 
                                           className="action-btn"
+                                          onClick={() => handleCopyArabic(hadith)}
+                                        >
+                                          <Copy size={15} />
+                                          <span>{t.copyArabic}</span>
+                                        </button>
+
+                                        <button 
+                                          className="action-btn"
+                                          onClick={() => handleCopyEnglish(hadith)}
+                                        >
+                                          <Copy size={15} />
+                                          <span>{t.copyEnglish}</span>
+                                        </button>
+
+                                        <button 
+                                          className="action-btn"
                                           onClick={() => handleShare(hadith)}
                                         >
                                           <Share2 size={15} />
@@ -1570,6 +1698,22 @@ const App: React.FC = () => {
                                           >
                                             {playingHadithId === hadith.id ? <VolumeX size={15} /> : <Volume2 size={15} />}
                                             <span>{playingHadithId === hadith.id ? t.stop : t.listen}</span>
+                                          </button>
+
+                                          <button 
+                                            className="action-btn"
+                                            onClick={() => handleCopyArabic(hadith)}
+                                          >
+                                            <Copy size={15} />
+                                            <span>{t.copyArabic}</span>
+                                          </button>
+
+                                          <button 
+                                            className="action-btn"
+                                            onClick={() => handleCopyEnglish(hadith)}
+                                          >
+                                            <Copy size={15} />
+                                            <span>{t.copyEnglish}</span>
                                           </button>
 
                                           <button 
