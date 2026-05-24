@@ -1413,5 +1413,106 @@ body {
   }
 }
 
+/* Dashboard Progress & Streak Widget */
+.progress-streak-widget {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+@media (max-width: 600px) {
+  .progress-streak-widget {
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+}
+
+.goal-card {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.streak-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.streak-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(229, 92, 57, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.streak-flame-container {
+  font-size: 3rem;
+  color: #ff6b35;
+  filter: drop-shadow(0 0 10px rgba(255, 107, 53, 0.4));
+  margin-bottom: 0.5rem;
+  animation: flame-pulse 2s infinite ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes flame-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(255, 107, 53, 0.4)); }
+  50% { transform: scale(1.1); filter: drop-shadow(0 0 18px rgba(255, 107, 53, 0.65)); }
+}
+
+.goal-adjust-btn {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.goal-adjust-btn:hover {
+  background: var(--accent-emerald-light);
+  border-color: var(--accent-emerald);
+  color: var(--accent-emerald);
+}
+
+.goal-adjust-btn:active {
+  transform: scale(0.95);
+}
+
+/* Rotate animation for shuffle */
+.shuffle-icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.shuffle-icon-btn:hover {
+  color: var(--accent-gold);
+  background: rgba(210, 183, 115, 0.1);
+  transform: rotate(180deg);
+}
+
 
 

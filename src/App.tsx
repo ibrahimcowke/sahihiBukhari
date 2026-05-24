@@ -26,7 +26,11 @@ import {
   VolumeX,
   Copy,
   Download,
-  CheckCircle
+  CheckCircle,
+  Flame,
+  Plus,
+  Minus,
+  RotateCw
 } from 'lucide-react';
 import { db, isSupabaseConfigured } from './supabaseClient';
 import { ruwaatsData } from './ruwaats';
@@ -158,7 +162,14 @@ const translations = {
     downloading: "Downloading...",
     downloaded: "Downloaded",
     markRead: "Mark Read",
-    markUnread: "Mark Unread"
+    markUnread: "Mark Unread",
+    dailyGoal: "Daily Goal",
+    readToday: "read today",
+    streak: "Reading Streak",
+    streakDays: "Days",
+    goalAdjust: "Adjust Goal",
+    goalReached: "Daily Goal Reached! 🎉",
+    shuffleHadith: "Shuffle Reflection"
   },
   arabic: {
     home: "الرئيسية",
@@ -281,7 +292,14 @@ const translations = {
     downloading: "جاري التحميل...",
     downloaded: "تم التحميل",
     markRead: "تحديد كمقروء",
-    markUnread: "تحديد كغير مقروء"
+    markUnread: "تحديد كغير مقروء",
+    dailyGoal: "الهدف اليومي",
+    readToday: "قُرئت اليوم",
+    streak: "سلسلة القراءة المتواصلة",
+    streakDays: "أيام",
+    goalAdjust: "تعديل الهدف",
+    goalReached: "تم تحقيق الهدف اليومي! 🎉",
+    shuffleHadith: "تغيير الحديث"
   }
 };
 
@@ -327,6 +345,39 @@ const App: React.FC = () => {
       return new Set();
     }
   });
+
+  // Daily Reading Goal & Streaks
+  const [dailyGoal, setDailyGoal] = useState<number>(() => {
+    const saved = localStorage.getItem('bukhari_daily_goal');
+    return saved ? parseInt(saved, 10) : 5;
+  });
+
+  const [streakCount, setStreakCount] = useState<number>(() => {
+    const saved = localStorage.getItem('bukhari_streak_count');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+
+  const [readHistory, setReadHistory] = useState<Record<number, string>>(() => {
+    try {
+      const saved = localStorage.getItem('bukhari_read_history');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const getTodayDateString = (): string => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const readTodayCount = useMemo(() => {
+    const todayStr = getTodayDateString();
+    return Object.values(readHistory).filter(date => date === todayStr).length;
+  }, [readHistory]);
 
   const [cachedChapterIds, setCachedChapterIds] = useState<Set<number>>(() => {
     const cached = new Set<number>();
@@ -417,6 +468,25 @@ const App: React.FC = () => {
   // Intersection observer ref to track reading progress in chapter view
   const hadithRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const readingBoxRef = useRef<HTMLDivElement | null>(null);
+
+  // Check reading streak validity on visit
+  useEffect(() => {
+    const lastRead = localStorage.getItem('bukhari_last_read_date');
+    if (lastRead) {
+      const todayStr = getTodayDateString();
+      if (lastRead !== todayStr) {
+        const lastReadDateObj = new Date(lastRead);
+        const todayDateObj = new Date(todayStr);
+        const diffTime = Math.abs(todayDateObj.getTime() - lastReadDateObj.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 1) {
+          // Reset streak to 0 since they missed a day
+          setStreakCount(0);
+          localStorage.setItem('bukhari_streak_count', '0');
+        }
+      }
+    }
+  }, []);
 
   // Initial Load
   useEffect(() => {
@@ -950,16 +1020,73 @@ const App: React.FC = () => {
     }
   };
 
-  // Toggle Hadith Read Status
+  // Toggle Hadith Read Status & Update Reading History/Streak
   const handleToggleRead = (hadithId: number) => {
+    const todayStr = getTodayDateString();
+    
+    // Toggle Read ID
     setReadHadithIds(prev => {
       const next = new Set(prev);
-      if (next.has(hadithId)) {
-        next.delete(hadithId);
-        triggerToast(language === 'arabic' ? 'تم التحديد كغير مقروء' : 'Marked as unread');
-      } else {
+      const isMarkingRead = !next.has(hadithId);
+      
+      if (isMarkingRead) {
         next.add(hadithId);
         triggerToast(language === 'arabic' ? 'تم التحديد كمقروء' : 'Marked as read');
+        
+        // Update read history mapping
+        setReadHistory(prevHistory => {
+          const nextHistory = { ...prevHistory, [hadithId]: todayStr };
+          localStorage.setItem('bukhari_read_history', JSON.stringify(nextHistory));
+          
+          // Check if this read completes the daily goal
+          const todayCount = Object.values(nextHistory).filter(date => date === todayStr).length;
+          if (todayCount === dailyGoal) {
+            setTimeout(() => triggerToast(t.goalReached), 600);
+          }
+          return nextHistory;
+        });
+
+        // Update Reading Streak
+        const lastRead = localStorage.getItem('bukhari_last_read_date');
+        if (lastRead) {
+          if (lastRead !== todayStr) {
+            // Check if last read was yesterday
+            const lastReadDateObj = new Date(lastRead);
+            const todayDateObj = new Date(todayStr);
+            const diffTime = Math.abs(todayDateObj.getTime() - lastReadDateObj.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 1) {
+              // Consecutive day
+              setStreakCount(prevStreak => {
+                const nextStreak = prevStreak + 1;
+                localStorage.setItem('bukhari_streak_count', String(nextStreak));
+                return nextStreak;
+              });
+            } else if (diffDays > 1) {
+              // Streak broken, start new
+              setStreakCount(1);
+              localStorage.setItem('bukhari_streak_count', '1');
+            }
+          }
+        } else {
+          // First time reading
+          setStreakCount(1);
+          localStorage.setItem('bukhari_streak_count', '1');
+        }
+        localStorage.setItem('bukhari_last_read_date', todayStr);
+
+      } else {
+        next.delete(hadithId);
+        triggerToast(language === 'arabic' ? 'تم التحديد كغير مقروء' : 'Marked as unread');
+        
+        // Remove from read history
+        setReadHistory(prevHistory => {
+          const nextHistory = { ...prevHistory };
+          delete nextHistory[hadithId];
+          localStorage.setItem('bukhari_read_history', JSON.stringify(nextHistory));
+          return nextHistory;
+        });
       }
       localStorage.setItem('bukhari_read_hadiths', JSON.stringify(Array.from(next)));
       return next;
@@ -983,6 +1110,42 @@ const App: React.FC = () => {
       triggerToast(language === 'arabic' ? 'فشل تحميل الباب. يرجى التحقق من الاتصال.' : 'Failed to download chapter. Please check connection.');
     } finally {
       setDownloadingChapters(prev => ({ ...prev, [chapterId]: false }));
+    }
+  };
+
+  // Adjust Daily Reading Goal Target
+  const handleAdjustGoal = (amount: number) => {
+    setDailyGoal(prev => {
+      const next = Math.max(1, prev + amount);
+      localStorage.setItem('bukhari_daily_goal', String(next));
+      return next;
+    });
+  };
+
+  // Shuffle Dynamic Daily Hadith Reflection
+  const handleShuffleDailyHadith = async () => {
+    try {
+      if (chapters.length === 0) return;
+      setDailyHadith(null); // Show loading state
+      
+      // Select a random chapter
+      const randomChapter = chapters[Math.floor(Math.random() * chapters.length)];
+      if (randomChapter) {
+        const hadithsList = await api.fetchHadithsByChapter(randomChapter.id);
+        if (hadithsList && hadithsList.length > 0) {
+          const randomHadith = hadithsList[Math.floor(Math.random() * hadithsList.length)];
+          setDailyHadith(randomHadith);
+        } else {
+          // Fallback to day of year dynamic load if fetch returns empty
+          const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+          const backupChapter = chapters[dayOfYear % chapters.length];
+          const backupList = await api.fetchHadithsByChapter(backupChapter.id);
+          setDailyHadith(backupList[dayOfYear % backupList.length]);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to shuffle daily hadith", err);
+      triggerToast(language === 'arabic' ? 'فشل تغيير الحديث' : 'Failed to shuffle hadith');
     }
   };
 
@@ -1215,6 +1378,57 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
+
+                {/* Daily Progress & Streak Widget */}
+                <div className="progress-streak-widget">
+                  {/* Daily Goal Card */}
+                  <div className="glass-card goal-card" style={{ padding: '1.75rem', border: '1px solid var(--glass-border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                      <h4 style={{ color: 'var(--accent-gold)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>
+                        {t.dailyGoal}
+                      </h4>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{t.goalAdjust}:</span>
+                        <button type="button" onClick={() => handleAdjustGoal(-1)} className="goal-adjust-btn"><Minus size={14} /></button>
+                        <button type="button" onClick={() => handleAdjustGoal(1)} className="goal-adjust-btn"><Plus size={14} /></button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                      <span style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {formatNumber(readTodayCount)} / {formatNumber(dailyGoal)}
+                      </span>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        {readTodayCount >= dailyGoal ? (
+                          <span style={{ color: 'var(--accent-emerald)', fontWeight: 600 }}>{t.goalReached}</span>
+                        ) : (
+                          `${formatNumber(dailyGoal - readTodayCount)} ${language === 'arabic' ? 'أحاديث متبقية اليوم' : 'hadiths left today'}`
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="chapter-progress-container" style={{ height: '8px', margin: 0 }}>
+                      <div 
+                        className="chapter-progress-bar" 
+                        style={{ width: `${Math.min(100, (readTodayCount / dailyGoal) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Reading Streak Card */}
+                  <div className="glass-card streak-card" style={{ padding: '1.75rem', border: '1px solid var(--glass-border)' }}>
+                    <div className="streak-flame-container">
+                      <Flame size={42} fill="currentColor" />
+                    </div>
+                    <span style={{ fontSize: '1.8rem', fontWeight: 700, color: '#ff6b35', lineHeight: 1.1 }}>
+                      {formatNumber(streakCount)}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '0.2rem' }}>
+                      {t.streak} ({formatNumber(streakCount)} {language === 'arabic' ? 'أيام' : 'Days'})
+                    </span>
+                  </div>
+                </div>
+
                 {/* Continue reading panel */}
                 {lastReadHadith && (
                   <div className="glass-card" style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--glass-border)' }}>
@@ -1330,9 +1544,19 @@ const App: React.FC = () => {
 
                 {/* Curated Daily Hadith Reflection */}
                 <div className="daily-reflection-card">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-gold)', marginBottom: '1.5rem', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
-                    <Sparkles size={14} />
-                    {t.curatedReflection}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-gold)', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                      <Sparkles size={14} />
+                      {t.curatedReflection}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleShuffleDailyHadith}
+                      className="shuffle-icon-btn"
+                      title={t.shuffleHadith}
+                    >
+                      <RotateCw size={14} />
+                    </button>
                   </div>
                   {dailyHadith ? (
                     <div>
