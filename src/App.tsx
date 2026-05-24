@@ -327,7 +327,7 @@ const App: React.FC = () => {
     return saved !== null ? saved === 'true' : true;
   });
   const [readingLayout, setReadingLayout] = useState<ReadingLayout>(() => {
-    return (localStorage.getItem('ummuhat_reading_layout') as ReadingLayout) || 'scroll';
+    return (localStorage.getItem('ummuhat_reading_layout') as ReadingLayout) || 'page';
   });
   const [currentHadithIndex, setCurrentHadithIndex] = useState<number>(0);
   const [slideDirection, setSlideDirection] = useState<number>(1);
