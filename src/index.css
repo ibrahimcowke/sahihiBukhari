@@ -1,5 +1,24 @@
 @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Cairo:wght@300;400;500;600;700;800;900&family=Tajawal:wght@300;400;500;700;900&family=Inter:wght@300;400;500;600;700&family=Scheherazade+New:wght@400;700&family=Lateef&display=swap');
 
+/* ===== KEYFRAME ANIMATIONS ===== */
+@keyframes shimmer-line {
+  0%   { opacity: 0; transform: scaleX(0.2); }
+  40%  { opacity: 1; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(1); }
+}
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent, 0 16px 48px var(--glass-shadow); }
+  50%       { box-shadow: 0 0 18px 2px var(--accent-emerald-light), 0 16px 48px var(--glass-shadow); }
+}
+@keyframes count-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 :root {
   /* Night Forest Theme (Default Dark) */
   --bg-primary: #080D0A;
@@ -208,38 +227,84 @@ body {
   border-radius: 24px;
   padding: 2rem;
   box-shadow: 0 10px 40px var(--glass-shadow);
-  transition: all 0.3s ease;
+  transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .glass-card:hover {
-  border-color: rgba(46, 159, 133, 0.2);
+  border-color: rgba(46, 159, 133, 0.25);
+  box-shadow: 0 14px 50px var(--glass-shadow);
 }
 
-/* Hadith Card specific spacing */
+/* ── Premium Hadith Card ── */
 .hadith-glass-panel {
   padding: 3.5rem 3rem;
   margin-bottom: 4.5rem;
   position: relative;
   overflow: hidden;
+  /* layered shadow: subtle depth + soft colored glow */
+  box-shadow:
+    0 2px 0 rgba(255,255,255,0.04) inset,
+    0 -1px 0 rgba(0,0,0,0.25) inset,
+    0 12px 48px var(--glass-shadow);
 }
 
+/* Gradient top-accent line (always visible, subtle) */
 .hadith-glass-panel::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, transparent, var(--accent-emerald), transparent);
-  opacity: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--accent-gold) 30%,
+    var(--accent-emerald) 70%,
+    transparent 100%
+  );
+  opacity: 0.45;
   transition: opacity 0.4s ease;
+  border-radius: 24px 24px 0 0;
+}
+
+/* Shimmer sweep pseudo-element on hover */
+.hadith-glass-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255,255,255,0.03) 50%,
+    transparent 100%
+  );
+  transform: skewX(-15deg);
+  pointer-events: none;
+  transition: left 0.7s ease;
+  opacity: 0;
 }
 
 .hadith-glass-panel:hover {
-  transform: translateY(-4px);
+  transform: translateY(-5px);
+  border-color: rgba(46, 159, 133, 0.3);
+  box-shadow:
+    0 2px 0 rgba(255,255,255,0.06) inset,
+    0 -1px 0 rgba(0,0,0,0.25) inset,
+    0 0 0 1px rgba(46, 159, 133, 0.12),
+    0 20px 60px var(--glass-shadow),
+    0 0 30px -8px var(--accent-emerald-light);
 }
 
 .hadith-glass-panel:hover::before {
+  opacity: 1;
+}
+
+.hadith-glass-panel:hover::after {
+  left: 120%;
   opacity: 1;
 }
 
@@ -313,7 +378,8 @@ body {
 .nav-item-btn.active {
   color: var(--accent-emerald);
   background: var(--accent-emerald-light);
-  font-weight: 500;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(46, 159, 133, 0.2) inset;
 }
 
 /* Welcome Header Styles with radial-gradient legibility masking */
@@ -332,6 +398,28 @@ body {
   width: 100%;
   max-width: 650px;
   margin: 0 auto 3rem auto;
+  /* Subtle top border shimmer */
+  border-top: 1px solid rgba(210, 183, 115, 0.15);
+  border-left: 1px solid rgba(255, 255, 255, 0.04);
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Inner shimmer at the top of welcome card */
+.welcome-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(210, 183, 115, 0.5) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
 }
 
 .welcome-tag {
@@ -485,31 +573,72 @@ body {
 
 .stat-card {
   text-align: center;
-  padding: 1.5rem;
+  padding: 1.75rem 1.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+}
+
+/* Subtle radial glow behind stat number */
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle at 50% 30%, var(--accent-emerald-light) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.stat-card:hover::before {
+  opacity: 1;
 }
 
 .stat-number {
-  font-size: 2rem;
+  font-size: 2.2rem;
   font-weight: 700;
   color: var(--accent-emerald);
+  letter-spacing: -0.5px;
+  animation: count-in 0.5s ease both;
+  line-height: 1;
 }
 
 .stat-label {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
+  font-weight: 500;
 }
 
-/* Daily Reflection Section */
+/* Daily Reflection Section — ornamental accent */
 .daily-reflection-card {
   border-left: 4px solid var(--accent-gold);
   margin-bottom: 3rem;
   position: relative;
+  background: linear-gradient(
+    135deg,
+    var(--glass-bg) 0%,
+    rgba(210, 183, 115, 0.05) 100%
+  );
+  overflow: hidden;
+}
+
+/* Corner ornament */
+.daily-reflection-card::after {
+  content: '✦';
+  position: absolute;
+  bottom: 1.2rem;
+  right: 1.5rem;
+  font-size: 1.4rem;
+  color: var(--accent-gold);
+  opacity: 0.18;
+  pointer-events: none;
+  line-height: 1;
 }
 
 /* Narrator Ruwaats Grid */
@@ -580,7 +709,8 @@ body {
 .hadith-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
   margin-top: 2rem;
   border-top: 1px solid var(--glass-border);
   padding-top: 1.5rem;
@@ -588,29 +718,41 @@ body {
 
 .action-btn {
   background: none;
-  border: none;
+  border: 1px solid transparent;
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  transition: color 0.2s ease, transform 0.2s ease;
-  padding: 0.4rem 0.8rem;
-  border-radius: 8px;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 450;
+  letter-spacing: 0.01em;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  padding: 0.38rem 0.75rem;
+  border-radius: 10px;
+  white-space: nowrap;
 }
 
 .action-btn:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--glass-border);
+  transform: translateY(-1px);
+}
+
+.action-btn:active {
+  transform: translateY(0);
 }
 
 [data-theme='paper'] .action-btn:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0,0,0,0.07);
 }
 
 .action-btn.active {
   color: var(--accent-emerald);
+  background: var(--accent-emerald-light);
+  border-color: rgba(46, 159, 133, 0.2);
 }
 
 /* Modals & Overlays */
@@ -676,22 +818,27 @@ body {
 
 .primary-btn {
   background: var(--accent-emerald);
+  background-image: linear-gradient(135deg, transparent 0%, rgba(210, 183, 115, 0.18) 100%);
   color: #ffffff;
   border: none;
   border-radius: 12px;
   padding: 0.8rem 1.6rem;
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.2s ease, transform 0.1s ease;
+  transition: filter 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 14px rgba(46, 159, 133, 0.25);
+  letter-spacing: 0.01em;
 }
 
 .primary-btn:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
+  filter: brightness(1.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(46, 159, 133, 0.4);
 }
 
 .primary-btn:active {
   transform: translateY(0);
+  box-shadow: 0 3px 10px rgba(46, 159, 133, 0.25);
 }
 
 /* Custom Search Box */
@@ -788,9 +935,9 @@ body {
 }
 
 [data-theme='clay'] .primary-btn {
-  background: #824116;
+  background: linear-gradient(135deg, #824116 0%, #A0541F 100%);
   color: #FFF6F0;
-  box-shadow: 0 4px 12px rgba(130, 65, 22, 0.3);
+  box-shadow: 0 4px 14px rgba(130, 65, 22, 0.35);
 }
 
 [data-theme='clay'] .action-btn {
@@ -804,6 +951,8 @@ body {
 
 [data-theme='clay'] .action-btn.active {
   color: #824116;
+  background: rgba(130, 65, 22, 0.12);
+  border-color: rgba(130, 65, 22, 0.25);
 }
 
 /* Wide Reader layout & Bilingual landscape reading layout styles */
@@ -976,19 +1125,55 @@ body {
     flex-wrap: wrap;
     gap: 0.5rem;
   }
+
+  /* Compact hadith cards on mobile */
+  .hadith-glass-panel {
+    padding: 2rem 1.5rem;
+    margin-bottom: 2.5rem;
+    border-radius: 20px;
+  }
+
+  /* Better action row on mobile: grid wrap */
+  .hadith-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    justify-items: center;
+  }
+
+  .action-btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.78rem !important;
+    padding: 0.45rem 0.5rem;
+  }
+
+  /* Stat cards single row on mobile */
+  .dashboard-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+
+  .stat-number {
+    font-size: 1.6rem;
+  }
+
+  .stat-card {
+    padding: 1.25rem 0.75rem;
+  }
 }
 
 @media (max-width: 480px) {
   /* Prevent floating bottom bar overflow on extra narrow devices */
   .bottom-nav-bar {
-    width: 92% !important;
-    padding: 0.35rem 0.5rem !important;
-    gap: 0.25rem !important;
+    width: 94% !important;
+    padding: 0.4rem 0.6rem !important;
+    gap: 0.2rem !important;
     bottom: 1rem !important;
   }
   
   .nav-item-btn {
-    padding: 0.4rem 0.5rem !important;
+    padding: 0.45rem 0.55rem !important;
     gap: 0.2rem !important;
     font-size: 0.7rem !important;
   }
@@ -998,16 +1183,9 @@ body {
     height: 16px !important;
   }
   
-  /* Prevent actions buttons from overflowing in Hadith cards */
+  /* 2-column action grid on very small screens */
   .hadith-actions {
-    justify-content: space-between !important;
-    gap: 0.4rem !important;
-  }
-  
-  .action-btn {
-    padding: 0.4rem 0.5rem !important;
-    gap: 0.25rem !important;
-    font-size: 0.78rem !important;
+    grid-template-columns: repeat(3, 1fr) !important;
   }
   
   /* Adjust margins on very small devices */
@@ -1015,6 +1193,15 @@ body {
     padding-top: 2rem !important;
     padding-left: 1rem !important;
     padding-right: 1rem !important;
+  }
+
+  /* Welcome header compact */
+  .welcome-header {
+    padding: 2rem 1.25rem;
+  }
+
+  .welcome-header h1 {
+    font-size: 2.2rem;
   }
 }
 

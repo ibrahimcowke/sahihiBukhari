@@ -317,7 +317,7 @@ const App: React.FC = () => {
     return (localStorage.getItem('ummuhat_arabic_font') as ArabicFont) || 'Amiri';
   });
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
-    return (localStorage.getItem('ummuhat_display_mode') as DisplayMode) || 'bilingual';
+    return (localStorage.getItem('ummuhat_display_mode') as DisplayMode) || 'arabic-only';
   });
   const [textAlignment, setTextAlignment] = useState<TextAlignment>(() => {
     return (localStorage.getItem('ummuhat_text_alignment') as TextAlignment) || 'right';
