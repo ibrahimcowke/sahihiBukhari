@@ -1,6 +1,124 @@
 import type { Hadith } from './types';
+import { bukhariData } from './data';
 
 const API_KEY = '$2y$10$hfYJl0B1y725HXIcRj21DX4g4ytbGREpRFcjqX3ltCFKQWXsP3sS';
+
+// Helper to normalize Arabic text (remove Tashkeel/diacritics, normalize letters)
+function normalizeArabic(text: string): string {
+  if (!text) return '';
+  return text
+    // Remove tashkeel (diacritics)
+    .replace(/[\u064B-\u0652]/g, '')
+    // Normalize Alef forms
+    .replace(/[أإآا]/g, 'ا')
+    // Normalize Teh Marbuta -> Heh
+    .replace(/ة/g, 'ه')
+    // Normalize Alef Maksura -> Yeh
+    .replace(/ى/g, 'ي')
+    // Remove tatweel (kashida)
+    .replace(/\u0640/g, '');
+}
+
+// Smart query matcher that handles singular/plural endings in Arabic
+function matchesArabicQuery(normText: string, normQuery: string, originalQuery: string): boolean {
+  if (normText.includes(normQuery)) return true;
+  
+  // If original query ends with 'ة' or 'ه', also try matching with 'ات' (plural suffix)
+  const cleanOriginal = originalQuery.trim();
+  if (cleanOriginal.endsWith('ة') || cleanOriginal.endsWith('ه')) {
+    const altQuery = normalizeArabic(cleanOriginal.slice(0, -1) + 'ات');
+    if (normText.includes(altQuery)) return true;
+  }
+  
+  // If original query ends with 'ات', also try matching with 'ه' / 'ة' (singular suffix)
+  if (cleanOriginal.endsWith('ات')) {
+    const altQuery = normalizeArabic(cleanOriginal.slice(0, -2) + 'ه');
+    if (normText.includes(altQuery)) return true;
+  }
+
+  // Also try matching the core stem (without 'ال')
+  if (cleanOriginal.startsWith('ال')) {
+    const altQuery = normalizeArabic(cleanOriginal.slice(2));
+    if (normText.includes(altQuery)) return true;
+  }
+
+  return false;
+}
+
+// Local search pool including static data and localStorage caches
+function getLocalSearchPool(): Hadith[] {
+  const pool: Hadith[] = [...bukhariData];
+  const seenIds = new Set<number>(pool.map(h => h.id));
+
+  // Add cached hadiths from bukhari_cached_hadiths
+  try {
+    const cachedData = localStorage.getItem('bukhari_cached_hadiths');
+    if (cachedData) {
+      const cached = JSON.parse(cachedData) as Record<number, Hadith>;
+      Object.values(cached).forEach(h => {
+        if (h && h.id && !seenIds.has(h.id)) {
+          pool.push(h);
+          seenIds.add(h.id);
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("Error reading cached hadiths for search pool:", e);
+  }
+
+  // Add hadiths from chapter caches
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('bukhari_hadiths_chapter_')) {
+      try {
+        const val = localStorage.getItem(key);
+        if (val) {
+          const list = JSON.parse(val) as Hadith[];
+          list.forEach(h => {
+            if (h && h.id && !seenIds.has(h.id)) {
+              pool.push(h);
+              seenIds.add(h.id);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn(`Error reading chapter cache ${key} for search pool:`, e);
+      }
+    }
+  }
+
+  return pool;
+}
+
+// Search locally using smart normalizations
+function searchLocalPool(query: string): Hadith[] {
+  const normQuery = normalizeArabic(query).toLowerCase().trim();
+  if (!normQuery) return [];
+
+  const pool = getLocalSearchPool();
+  return pool.filter(h => {
+    const normArabic = normalizeArabic(h.arabic).toLowerCase();
+    const normTranslation = (h.translation || '').toLowerCase();
+    const normKitab = (h.kitab || '').toLowerCase();
+    const normKitabArabic = normalizeArabic(h.kitabArabic || '').toLowerCase();
+    const normBab = (h.bab || '').toLowerCase();
+    const normBabArabic = normalizeArabic(h.babArabic || '').toLowerCase();
+    const normNarrator = (h.englishNarrator || '').toLowerCase();
+
+    // Check query matches
+    const queryInArabic = matchesArabicQuery(normArabic, normQuery, query) || 
+                          matchesArabicQuery(normKitabArabic, normQuery, query) || 
+                          matchesArabicQuery(normBabArabic, normQuery, query);
+                          
+    const queryInEnglish = normTranslation.includes(normQuery) || 
+                           normKitab.includes(normQuery) || 
+                           normBab.includes(normQuery) || 
+                           normNarrator.includes(normQuery);
+
+    return queryInArabic || queryInEnglish;
+  });
+}
+
 const BASE_URL = 'https://hadithapi.com/public/api';
 
 export interface Chapter {
@@ -132,23 +250,39 @@ export const api = {
       
       if (!res.ok) {
         if (res.status === 404) {
-          return [];
+          // Fallback to local search if online API returns 404
+          return searchLocalPool(query);
         }
         throw new Error(`HTTP error ${res.status}`);
       }
       const data = await res.json();
 
+      let onlineResults: Hadith[] = [];
       if (data.hadiths && data.hadiths.data && Array.isArray(data.hadiths.data)) {
-        return data.hadiths.data.map((h: ApiHadith) => {
+        onlineResults = data.hadiths.data.map((h: ApiHadith) => {
           const chId = h.chapterId?.toString();
           const activeChapter = chId ? chapterMap.get(chId) : undefined;
           return this.mapApiHadith(h, activeChapter);
         });
       }
-      return [];
+
+      // Merge online results with local search pool findings (ensuring no duplicates)
+      const localResults = searchLocalPool(query);
+      const merged = [...onlineResults];
+      const seenIds = new Set<number>(onlineResults.map(h => h.id));
+      
+      localResults.forEach(h => {
+        if (!seenIds.has(h.id)) {
+          merged.push(h);
+          seenIds.add(h.id);
+        }
+      });
+
+      return merged;
     } catch (error) {
       console.error(`Failed to search hadiths for query "${query}":`, error);
-      return [];
+      // Fallback to local search on network or parse error
+      return searchLocalPool(query);
     }
   },
 
