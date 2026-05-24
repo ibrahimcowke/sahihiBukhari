@@ -25,4 +25,6 @@ dist-ssr
 .env
 .env.*
 scratch/
+.agents/
+skills-lock.json
 
