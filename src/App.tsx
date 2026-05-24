@@ -1388,6 +1388,7 @@ const App: React.FC = () => {
                     </button>
                   </div>
 
+                  <img src="/app-icon.png" alt="Ummuhat Logo" className="welcome-app-logo" />
                   <div className="welcome-tag">
                     <Sparkles size={18} />
                     <span>{t.spiritualOasis}</span>
@@ -2994,7 +2995,7 @@ const App: React.FC = () => {
           >
             {/* Sidebar Brand Header (Desktop Sidebar only) */}
             <div className="nav-brand-header">
-              <Sparkles size={20} style={{ color: 'var(--accent-gold)' }} />
+              <img src="/app-icon.png" alt="Ummuhat Logo" className="nav-brand-logo" />
               <h3 style={{ fontFamily: 'var(--font-arabic)', fontSize: '1.4rem' }}>{t.bukhariTitle}</h3>
             </div>
 
