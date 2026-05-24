@@ -436,6 +436,12 @@ const App: React.FC = () => {
     return (localStorage.getItem('ummuhat_theme') as Theme) || 'night';
   });
   const [showThemeSwatches, setShowThemeSwatches] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+  const [downloadAllCurrent, setDownloadAllCurrent] = useState(0);
+  const [downloadAllTotal, setDownloadAllTotal] = useState(0);
+  const [downloadAllError, setDownloadAllError] = useState<string | null>(null);
+  const downloadCancelRef = useRef(false);
   const [arabicFont, setArabicFont] = useState<ArabicFont>(() => {
     return (localStorage.getItem('ummuhat_arabic_font') as ArabicFont) || 'Amiri';
   });
@@ -1112,6 +1118,96 @@ const App: React.FC = () => {
       triggerToast(language === 'arabic' ? 'فشل تحميل الباب. يرجى التحقق من الاتصال.' : 'Failed to download chapter. Please check connection.');
     } finally {
       setDownloadingChapters(prev => ({ ...prev, [chapterId]: false }));
+    }
+  };
+
+  // Sync online/offline state
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Clear all offline cached chapters
+  const handleClearOfflineCache = () => {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('bukhari_hadiths_chapter_')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    setCachedChapterIds(new Set());
+    triggerToast(language === 'arabic' ? 'تم مسح الملفات المؤقتة بنجاح.' : 'Offline cache cleared successfully.');
+  };
+
+  // Download all chapters for offline reading
+  const handleDownloadAllChapters = async () => {
+    if (isDownloadingAll) return;
+    setIsDownloadingAll(true);
+    setDownloadAllError(null);
+    downloadCancelRef.current = false;
+
+    let chaptersList = chapters;
+    if (chaptersList.length === 0) {
+      try {
+        chaptersList = await api.fetchChapters();
+        setChapters(chaptersList);
+      } catch (err) {
+        setDownloadAllError(language === 'arabic' ? 'فشل تحميل الفهرس. يرجى التحقق من اتصالك بالإنترنت.' : 'Failed to load index. Please check your internet connection.');
+        setIsDownloadingAll(false);
+        return;
+      }
+    }
+
+    const uncachedChapters = chaptersList.filter(c => !cachedChapterIds.has(c.id));
+    setDownloadAllTotal(uncachedChapters.length);
+    setDownloadAllCurrent(0);
+
+    if (uncachedChapters.length === 0) {
+      triggerToast(language === 'arabic' ? 'جميع الأبواب محملة بالفعل.' : 'All chapters are already downloaded.');
+      setIsDownloadingAll(false);
+      return;
+    }
+
+    let completed = 0;
+    for (const chapter of uncachedChapters) {
+      if (downloadCancelRef.current) {
+        triggerToast(language === 'arabic' ? 'تم إلغاء التحميل.' : 'Download cancelled.');
+        break;
+      }
+      try {
+        await api.fetchHadithsByChapter(chapter.id);
+        setCachedChapterIds(prev => {
+          const next = new Set(prev);
+          next.add(chapter.id);
+          return next;
+        });
+        completed++;
+        setDownloadAllCurrent(completed);
+      } catch (err: any) {
+        console.error("Offline download error for chapter", chapter.id, err);
+        if (err.name === 'QuotaExceededError' || err.message?.includes('quota') || err.message?.includes('storage')) {
+          setDownloadAllError(language === 'arabic' ? 'تم تجاوز مساحة التخزين المتاحة للمتصفح.' : 'Browser storage quota exceeded.');
+          break;
+        } else {
+          setDownloadAllError(language === 'arabic' ? 'فشل تحميل بعض الأبواب. يرجى التحقق من اتصال الإنترنت.' : 'Failed to download some chapters. Please check your internet connection.');
+          break;
+        }
+      }
+      // Wait 150ms between chapters to not slam API/storage
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+
+    setIsDownloadingAll(false);
+    if (!downloadCancelRef.current && !downloadAllError && completed === uncachedChapters.length) {
+      triggerToast(language === 'arabic' ? 'تم تحميل جميع الأبواب بنجاح لقراءتها دون اتصال!' : 'All chapters downloaded successfully for offline use!');
     }
   };
 
@@ -2963,7 +3059,7 @@ const App: React.FC = () => {
                   )}
 
                   {/* Supabase Check */}
-                  <div className="setting-row" style={{ borderBottom: 'none' }}>
+                  <div className="setting-row">
                     <div>
                       <h4 style={{ fontWeight: 500, marginBottom: '0.2rem' }}>{t.dbConfig}</h4>
                       <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t.dbDesc}</p>
@@ -2973,6 +3069,154 @@ const App: React.FC = () => {
                       <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>
                         {isSupabaseConfigured ? t.dbLive : t.dbOffline}
                       </span>
+                    </div>
+                  </div>
+
+                  {/* Offline Sync Manager */}
+                  <div className="setting-row" style={{ borderBottom: 'none' }}>
+                    <div style={{ flex: 1 }}>
+                       <h4 style={{ fontWeight: 500, marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        {language === 'arabic' ? 'إدارة القراءة دون اتصال' : 'Offline Reading Manager'}
+                        <span style={{ 
+                          fontSize: '0.75rem', 
+                          padding: '0.1rem 0.4rem', 
+                          borderRadius: '4px',
+                          background: isOnline ? 'rgba(46, 159, 133, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                          color: isOnline ? 'var(--accent-emerald)' : 'var(--accent-red)',
+                          fontWeight: 500
+                        }}>
+                          {isOnline ? (language === 'arabic' ? 'متصل' : 'Online') : (language === 'arabic' ? 'غير متصل' : 'Offline')}
+                        </span>
+                      </h4>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                        {language === 'arabic' 
+                          ? 'قم بتنزيل صحيح البخاري كاملاً للوصول إليه بدون إنترنت.' 
+                          : 'Download the entire Sahih Al-Bukhari library for complete offline access.'}
+                      </p>
+                      
+                      {/* Status Info */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.5rem 0', fontSize: '0.85rem' }}>
+                        <span style={{ 
+                          padding: '0.2rem 0.5rem', 
+                          borderRadius: '6px', 
+                          background: cachedChapterIds.size === (chapters.length || 97) ? 'rgba(46, 159, 133, 0.15)' : 'rgba(210, 183, 115, 0.15)',
+                          color: cachedChapterIds.size === (chapters.length || 97) ? 'var(--accent-emerald)' : 'var(--accent-gold)',
+                          fontWeight: 500
+                        }}>
+                          {cachedChapterIds.size} / {chapters.length || 97} {language === 'arabic' ? 'أبواب محملة' : 'chapters cached'}
+                        </span>
+                        
+                        {cachedChapterIds.size === (chapters.length || 97) && (
+                          <span style={{ color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                            <CheckCircle size={14} /> {language === 'arabic' ? 'مكتمل ومزامن' : 'Fully Synced'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Download Progress Bar */}
+                      {isDownloadingAll && (
+                        <div style={{ marginTop: '0.8rem', width: '100%', maxWidth: '400px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.25rem' }}>
+                            <span style={{ color: 'var(--accent-emerald)', fontWeight: 500 }}>
+                              {language === 'arabic' ? 'جاري تحميل الأحاديث...' : 'Downloading scriptures...'}
+                            </span>
+                            <span>
+                              {formatNumber(downloadAllCurrent)} / {formatNumber(downloadAllTotal)}
+                            </span>
+                          </div>
+                          <div style={{ 
+                            height: '6px', 
+                            width: '100%', 
+                            background: 'var(--input-bg)', 
+                            borderRadius: '999px', 
+                            overflow: 'hidden', 
+                            border: '1px solid var(--glass-border)' 
+                          }}>
+                            <div style={{ 
+                              height: '100%', 
+                              background: 'linear-gradient(90deg, var(--accent-emerald) 0%, var(--accent-gold) 100%)', 
+                              width: `${(downloadAllCurrent / (downloadAllTotal || 1)) * 100}%`,
+                              transition: 'width 0.2s ease-out'
+                            }} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error Display */}
+                      {downloadAllError && (
+                        <p style={{ color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                          {downloadAllError}
+                        </p>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                      {isDownloadingAll ? (
+                        <button
+                          onClick={() => { downloadCancelRef.current = true; }}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            color: 'var(--accent-red)',
+                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                            padding: '0.5rem 1rem',
+                            borderRadius: '10px',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {t.cancel}
+                        </button>
+                      ) : (
+                        <>
+                          {cachedChapterIds.size > 0 && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm(language === 'arabic' ? 'هل أنت متأكد من حذف جميع الملفات المحملة؟ ستحتاج إلى الإنترنت مجدداً لقراءتها.' : 'Are you sure you want to clear all offline cached chapters? You will need internet connection to read them again.')) {
+                                  handleClearOfflineCache();
+                                }
+                              }}
+                              style={{
+                                background: 'transparent',
+                                color: 'var(--text-secondary)',
+                                border: '1px solid var(--glass-border)',
+                                padding: '0.5rem 1rem',
+                                borderRadius: '10px',
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent-red)'}
+                              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+                            >
+                              {language === 'arabic' ? 'مسح التخزين' : 'Clear Cache'}
+                            </button>
+                          )}
+                          
+                          {cachedChapterIds.size < (chapters.length || 97) && (
+                            <button
+                              onClick={handleDownloadAllChapters}
+                              style={{
+                                background: 'var(--accent-emerald)',
+                                color: 'white',
+                                border: 'none',
+                                padding: '0.5rem 1.2rem',
+                                borderRadius: '10px',
+                                fontSize: '0.85rem',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              <Download size={14} />
+                              {language === 'arabic' ? 'تحميل الكل' : 'Download All'}
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
