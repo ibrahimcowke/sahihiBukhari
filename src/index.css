@@ -188,8 +188,8 @@ body {
 .reading-container {
   max-width: var(--max-width);
   margin: 0 auto;
-  /* Extra bottom padding so content clears the floating nav bar */
-  padding: 4rem 1.5rem 10rem;
+  /* Extra bottom padding so content clears the floating nav bar, safe area aware */
+  padding: calc(4rem + env(safe-area-inset-top, 0px)) 1.5rem calc(10rem + env(safe-area-inset-bottom, 0px));
   min-height: 100vh;
 }
 
@@ -335,7 +335,7 @@ body {
 /* Dashboard Floating Bottom Bar */
 .bottom-nav-bar {
   position: fixed;
-  bottom: 2rem;
+  bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   background: var(--glass-bg);

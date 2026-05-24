@@ -1,0 +1,24 @@
+{
+  "name": "Ummuhat - Sahih Al-Bukhari",
+  "short_name": "Ummuhat",
+  "description": "A beautiful, premium, offline Hadith reader for Sahih Al-Bukhari.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080D0A",
+  "theme_color": "#080D0A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "48x48 72x72 96x96 128x128 192x192 256x256 384x384 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
