@@ -30,7 +30,8 @@ import {
   Flame,
   Plus,
   Minus,
-  RotateCw
+  RotateCw,
+  Palette
 } from 'lucide-react';
 import { db, isSupabaseConfigured } from './supabaseClient';
 import { ruwaatsData } from './ruwaats';
@@ -434,6 +435,7 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('ummuhat_theme') as Theme) || 'night';
   });
+  const [showThemeSwatches, setShowThemeSwatches] = useState(false);
   const [arabicFont, setArabicFont] = useState<ArabicFont>(() => {
     return (localStorage.getItem('ummuhat_arabic_font') as ArabicFont) || 'Amiri';
   });
@@ -1342,6 +1344,50 @@ const App: React.FC = () => {
                 transition={{ duration: 0.5 }}
               >
                 <div className="welcome-header">
+                  {/* Quick Theme Swatches Selector */}
+                  <div 
+                    className="theme-selector-container" 
+                    style={{ [language === 'arabic' ? 'left' : 'right']: '1.2rem' }}
+                  >
+                    <AnimatePresence>
+                      {showThemeSwatches && (
+                        <motion.div 
+                          className="theme-swatches-row"
+                          initial={{ width: 0, opacity: 0 }}
+                          animate={{ width: 'auto', opacity: 1 }}
+                          exit={{ width: 0, opacity: 0 }}
+                          transition={{ duration: 0.25 }}
+                          style={{ overflow: 'hidden', display: 'flex' }}
+                        >
+                          {[
+                            { id: 'night', color: '#080D0A', name: t.themeNight },
+                            { id: 'paper', color: '#F4F8F5', name: t.themePaper },
+                            { id: 'sepia', color: '#EFEBDE', name: t.themeSepia },
+                            { id: 'indigo', color: '#0A0D1A', name: t.themeIndigo },
+                            { id: 'emerald', color: '#04140D', name: t.themeEmerald },
+                            { id: 'clay', color: '#B87B52', name: t.themeClay }
+                          ].map((item) => (
+                            <div
+                              key={item.id}
+                              className={`theme-swatch-circle ${theme === item.id ? 'active' : ''}`}
+                              style={{ backgroundColor: item.color }}
+                              onClick={() => setTheme(item.id as Theme)}
+                              title={item.name}
+                            />
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    <button
+                      type="button"
+                      className="theme-selector-btn"
+                      onClick={() => setShowThemeSwatches(!showThemeSwatches)}
+                      title={language === 'arabic' ? 'تغيير السمة سريعاً' : 'Change Theme Quickly'}
+                    >
+                      <Palette size={16} style={{ color: showThemeSwatches ? 'var(--accent-emerald)' : 'var(--text-secondary)' }} />
+                    </button>
+                  </div>
+
                   <div className="welcome-tag">
                     <Sparkles size={18} />
                     <span>{t.spiritualOasis}</span>
