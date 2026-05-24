@@ -316,9 +316,7 @@ const App: React.FC = () => {
   const [arabicFont, setArabicFont] = useState<ArabicFont>(() => {
     return (localStorage.getItem('ummuhat_arabic_font') as ArabicFont) || 'Amiri';
   });
-  const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
-    return (localStorage.getItem('ummuhat_display_mode') as DisplayMode) || 'arabic-only';
-  });
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('arabic-only');
   const [textAlignment, setTextAlignment] = useState<TextAlignment>(() => {
     return (localStorage.getItem('ummuhat_text_alignment') as TextAlignment) || 'right';
   });
@@ -862,7 +860,10 @@ const App: React.FC = () => {
 
   // Share Function
   const handleShare = (hadith: Hadith) => {
-    const shareText = `Sahih al-Bukhari (Hadith ${hadith.number})\n\n[Arabic]\n${hadith.arabic}\n\n[Translation]\n${hadith.translation}\n\n- Spiritual Reading Space`;
+    const translationPart = displayMode !== 'arabic-only' && hadith.translation 
+      ? `\n\n[Translation]\n${hadith.translation}` 
+      : '';
+    const shareText = `Sahih al-Bukhari (Hadith ${hadith.number})\n\n[Arabic]\n${hadith.arabic}${translationPart}\n\n- Spiritual Reading Space`;
     navigator.clipboard.writeText(shareText);
     triggerToast(t.copied);
   };
@@ -1512,10 +1513,12 @@ const App: React.FC = () => {
                                   <Copy size={15} />
                                   <span>{t.copyArabic}</span>
                                 </button>
-                                <button className="action-btn" onClick={() => handleCopyEnglish(hadith)}>
-                                  <Copy size={15} />
-                                  <span>{t.copyEnglish}</span>
-                                </button>
+                                {displayMode !== 'arabic-only' && (
+                                  <button className="action-btn" onClick={() => handleCopyEnglish(hadith)}>
+                                    <Copy size={15} />
+                                    <span>{t.copyEnglish}</span>
+                                  </button>
+                                )}
                                 <button className="action-btn" onClick={() => handleShare(hadith)}>
                                   <Share2 size={15} />
                                   <span>{t.share}</span>
@@ -1705,13 +1708,15 @@ const App: React.FC = () => {
                                           <span>{t.copyArabic}</span>
                                         </button>
 
-                                        <button 
-                                          className="action-btn"
-                                          onClick={() => handleCopyEnglish(hadith)}
-                                        >
-                                          <Copy size={15} />
-                                          <span>{t.copyEnglish}</span>
-                                        </button>
+                                        {displayMode !== 'arabic-only' && (
+                                          <button 
+                                            className="action-btn"
+                                            onClick={() => handleCopyEnglish(hadith)}
+                                          >
+                                            <Copy size={15} />
+                                            <span>{t.copyEnglish}</span>
+                                          </button>
+                                        )}
 
                                         <button 
                                           className="action-btn"
@@ -1880,7 +1885,7 @@ const App: React.FC = () => {
                                 </AnimatePresence>
 
                                 {/* Pagination controls */}
-                                <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                                <div className="hadith-page-nav" style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
                                   <button
                                     type="button"
                                     disabled={isFirst && !hasPrevChapter}
@@ -1892,14 +1897,15 @@ const App: React.FC = () => {
                                       alignItems: 'center',
                                       justifyContent: 'center',
                                       gap: '0.5rem',
-                                      padding: '0.75rem 1.25rem',
+                                      padding: '0.9rem 1.25rem',
                                       cursor: (isFirst && !hasPrevChapter) ? 'not-allowed' : 'pointer',
                                       opacity: (isFirst && !hasPrevChapter) ? 0.4 : 1,
                                       border: '1px solid var(--glass-border)',
                                       background: 'var(--glass-bg)',
                                       color: 'var(--text-primary)',
-                                      borderRadius: '12px',
+                                      borderRadius: '14px',
                                       fontSize: '0.9rem',
+                                      minHeight: '48px',
                                       transition: 'all 0.2s'
                                     }}
                                     onMouseEnter={(e) => { if (!(isFirst && !hasPrevChapter)) e.currentTarget.style.borderColor = 'var(--accent-emerald)'; }}
@@ -1924,14 +1930,15 @@ const App: React.FC = () => {
                                       alignItems: 'center',
                                       justifyContent: 'center',
                                       gap: '0.5rem',
-                                      padding: '0.75rem 1.25rem',
+                                      padding: '0.9rem 1.25rem',
                                       background: isLast ? 'var(--accent-gold)' : 'var(--accent-emerald)',
                                       borderColor: isLast ? 'var(--accent-gold)' : 'var(--accent-emerald)',
                                       color: 'white',
-                                      borderRadius: '12px',
+                                      borderRadius: '14px',
                                       cursor: (isLast && !hasNextChapter) ? 'not-allowed' : 'pointer',
                                       opacity: (isLast && !hasNextChapter) ? 0.4 : 1,
                                       fontSize: '0.9rem',
+                                      minHeight: '48px',
                                       transition: 'all 0.2s'
                                     }}
                                   >
@@ -2293,60 +2300,62 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Hadith Display Mode */}
-                  <div className="setting-row">
-                    <div>
-                      <h4 style={{ fontWeight: 500, marginBottom: '0.2rem' }}>{t.displayModeLabel}</h4>
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t.displayModeDesc}</p>
+                  {/* Hadith Display Mode (hidden in Arabic-only mode) */}
+                  {displayMode !== 'arabic-only' && (
+                    <div className="setting-row">
+                      <div>
+                        <h4 style={{ fontWeight: 500, marginBottom: '0.2rem' }}>{t.displayModeLabel}</h4>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t.displayModeDesc}</p>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.8rem' }}>
+                        <button 
+                          onClick={() => setDisplayMode('bilingual')}
+                          style={{ 
+                            background: displayMode === 'bilingual' ? 'var(--accent-emerald)' : 'var(--input-bg)', 
+                            color: displayMode === 'bilingual' ? 'white' : 'var(--text-primary)', 
+                            border: '1px solid var(--glass-border)', 
+                            padding: '0.5rem 0.8rem', 
+                            borderRadius: '10px', 
+                            fontSize: '0.8rem', 
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {t.displayBilingual}
+                        </button>
+                        <button 
+                          onClick={() => setDisplayMode('arabic-only')}
+                          style={{ 
+                            background: (displayMode as string) === 'arabic-only' ? 'var(--accent-emerald)' : 'var(--input-bg)', 
+                            color: (displayMode as string) === 'arabic-only' ? 'white' : 'var(--text-primary)', 
+                            border: '1px solid var(--glass-border)', 
+                            padding: '0.5rem 0.8rem', 
+                            borderRadius: '10px', 
+                            fontSize: '0.8rem', 
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {t.displayArabicOnly}
+                        </button>
+                        <button 
+                          onClick={() => setDisplayMode('translation-only')}
+                          style={{ 
+                            background: displayMode === 'translation-only' ? 'var(--accent-emerald)' : 'var(--input-bg)', 
+                            color: displayMode === 'translation-only' ? 'white' : 'var(--text-primary)', 
+                            border: '1px solid var(--glass-border)', 
+                            padding: '0.5rem 0.8rem', 
+                            borderRadius: '10px', 
+                            fontSize: '0.8rem', 
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {t.displayTranslationOnly}
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.8rem' }}>
-                      <button 
-                        onClick={() => setDisplayMode('bilingual')}
-                        style={{ 
-                          background: displayMode === 'bilingual' ? 'var(--accent-emerald)' : 'var(--input-bg)', 
-                          color: displayMode === 'bilingual' ? 'white' : 'var(--text-primary)', 
-                          border: '1px solid var(--glass-border)', 
-                          padding: '0.5rem 0.8rem', 
-                          borderRadius: '10px', 
-                          fontSize: '0.8rem', 
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        {t.displayBilingual}
-                      </button>
-                      <button 
-                        onClick={() => setDisplayMode('arabic-only')}
-                        style={{ 
-                          background: displayMode === 'arabic-only' ? 'var(--accent-emerald)' : 'var(--input-bg)', 
-                          color: displayMode === 'arabic-only' ? 'white' : 'var(--text-primary)', 
-                          border: '1px solid var(--glass-border)', 
-                          padding: '0.5rem 0.8rem', 
-                          borderRadius: '10px', 
-                          fontSize: '0.8rem', 
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        {t.displayArabicOnly}
-                      </button>
-                      <button 
-                        onClick={() => setDisplayMode('translation-only')}
-                        style={{ 
-                          background: displayMode === 'translation-only' ? 'var(--accent-emerald)' : 'var(--input-bg)', 
-                          color: displayMode === 'translation-only' ? 'white' : 'var(--text-primary)', 
-                          border: '1px solid var(--glass-border)', 
-                          padding: '0.5rem 0.8rem', 
-                          borderRadius: '10px', 
-                          fontSize: '0.8rem', 
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        {t.displayTranslationOnly}
-                      </button>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Arabic Text Alignment */}
                   <div className="setting-row">
@@ -2403,45 +2412,47 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Show Sanad */}
-                  <div className="setting-row">
-                    <div>
-                      <h4 style={{ fontWeight: 500, marginBottom: '0.2rem' }}>{t.sanadLabel}</h4>
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t.sanadDesc}</p>
+                  {/* Show Sanad (hidden in Arabic-only mode) */}
+                  {displayMode !== 'arabic-only' && (
+                    <div className="setting-row">
+                      <div>
+                        <h4 style={{ fontWeight: 500, marginBottom: '0.2rem' }}>{t.sanadLabel}</h4>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t.sanadDesc}</p>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.8rem' }}>
+                        <button 
+                          onClick={() => setShowSanad(true)}
+                          style={{ 
+                            background: showSanad ? 'var(--accent-emerald)' : 'var(--input-bg)', 
+                            color: showSanad ? 'white' : 'var(--text-primary)', 
+                            border: '1px solid var(--glass-border)', 
+                            padding: '0.5rem 1rem', 
+                            borderRadius: '10px', 
+                            fontSize: '0.85rem', 
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {t.sanadShow}
+                        </button>
+                        <button 
+                          onClick={() => setShowSanad(false)}
+                          style={{ 
+                            background: !showSanad ? 'var(--accent-emerald)' : 'var(--input-bg)', 
+                            color: !showSanad ? 'white' : 'var(--text-primary)', 
+                            border: '1px solid var(--glass-border)', 
+                            padding: '0.5rem 1rem', 
+                            borderRadius: '10px', 
+                            fontSize: '0.85rem', 
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {t.sanadHide}
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.8rem' }}>
-                      <button 
-                        onClick={() => setShowSanad(true)}
-                        style={{ 
-                          background: showSanad ? 'var(--accent-emerald)' : 'var(--input-bg)', 
-                          color: showSanad ? 'white' : 'var(--text-primary)', 
-                          border: '1px solid var(--glass-border)', 
-                          padding: '0.5rem 1rem', 
-                          borderRadius: '10px', 
-                          fontSize: '0.85rem', 
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        {t.sanadShow}
-                      </button>
-                      <button 
-                        onClick={() => setShowSanad(false)}
-                        style={{ 
-                          background: !showSanad ? 'var(--accent-emerald)' : 'var(--input-bg)', 
-                          color: !showSanad ? 'white' : 'var(--text-primary)', 
-                          border: '1px solid var(--glass-border)', 
-                          padding: '0.5rem 1rem', 
-                          borderRadius: '10px', 
-                          fontSize: '0.85rem', 
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        {t.sanadHide}
-                      </button>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Arabic Font Size */}
                   <div className="setting-row">
@@ -2462,24 +2473,26 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Translation Font Size */}
-                  <div className="setting-row">
-                    <div>
-                      <h4 style={{ fontWeight: 500, marginBottom: '0.2rem' }}>{t.translationTypography}</h4>
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t.translationTypographyDesc}</p>
+                  {/* Translation Font Size (hidden in Arabic-only mode) */}
+                  {displayMode !== 'arabic-only' && (
+                    <div className="setting-row">
+                      <div>
+                        <h4 style={{ fontWeight: 500, marginBottom: '0.2rem' }}>{t.translationTypography}</h4>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t.translationTypographyDesc}</p>
+                      </div>
+                      <div className="slider-container">
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{formatNumber(translationFontSize)}px</span>
+                        <input 
+                          type="range" 
+                          min="14" 
+                          max="24" 
+                          className="font-slider" 
+                          value={translationFontSize} 
+                          onChange={(e) => setTranslationFontSize(parseInt(e.target.value))} 
+                        />
+                      </div>
                     </div>
-                    <div className="slider-container">
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{formatNumber(translationFontSize)}px</span>
-                      <input 
-                        type="range" 
-                        min="14" 
-                        max="24" 
-                        className="font-slider" 
-                        value={translationFontSize} 
-                        onChange={(e) => setTranslationFontSize(parseInt(e.target.value))} 
-                      />
-                    </div>
-                  </div>
+                  )}
 
                   {/* Supabase Check */}
                   <div className="setting-row" style={{ borderBottom: 'none' }}>

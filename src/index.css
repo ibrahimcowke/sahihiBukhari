@@ -188,7 +188,8 @@ body {
 .reading-container {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 4rem 1.5rem 12rem;
+  /* Extra bottom padding so content clears the floating nav bar */
+  padding: 4rem 1.5rem 10rem;
   min-height: 100vh;
 }
 
@@ -708,12 +709,12 @@ body {
 /* Action Controls Inside Hadith Panel */
 .hadith-actions {
   display: flex;
-  justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 0.5rem 1rem;
+  justify-content: flex-start;
+  gap: 0.5rem;
   margin-top: 2rem;
   border-top: 1px solid var(--glass-border);
-  padding-top: 1.5rem;
+  padding-top: 1.25rem;
 }
 
 .action-btn {
@@ -721,16 +722,18 @@ body {
   border: 1px solid transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.45rem;
   font-size: 0.82rem;
   font-weight: 450;
   letter-spacing: 0.01em;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
-  padding: 0.38rem 0.75rem;
-  border-radius: 10px;
+  padding: 0.45rem 0.9rem;
+  border-radius: 99px;
   white-space: nowrap;
+  /* min touch target */
+  min-height: 36px;
 }
 
 .action-btn:hover {
@@ -752,7 +755,7 @@ body {
 .action-btn.active {
   color: var(--accent-emerald);
   background: var(--accent-emerald-light);
-  border-color: rgba(46, 159, 133, 0.2);
+  border-color: rgba(46, 159, 133, 0.25);
 }
 
 /* Modals & Overlays */
@@ -993,10 +996,13 @@ body {
 
 /* Scrollable container for text box in page view */
 .hadith-scroll-box {
-  max-height: 520px;
+  /* Use dynamic viewport height so content fits the screen on all devices */
+  max-height: min(520px, calc(100dvh - 340px));
   overflow-y: auto;
-  padding-right: 0.75rem;
-  margin-bottom: 2rem;
+  padding-right: 0.5rem;
+  margin-bottom: 1.5rem;
+  /* smooth momentum scroll on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Custom scrollbar for the reading box */
@@ -1106,7 +1112,61 @@ body {
   }
 }
 
-/* Mobile Responsive Adjustments for Small Screens */
+/* ======================================
+   MOBILE — up to 768px
+   ====================================== */
+@media (max-width: 768px) {
+  /* Tighter reading container on phones */
+  .reading-container {
+    padding: 3rem 1rem 9rem !important;
+  }
+
+  /* Compact hadith glass card */
+  .hadith-glass-panel {
+    padding: 1.5rem 1.25rem 1.75rem;
+    margin-bottom: 1.5rem;
+    border-radius: 20px;
+  }
+
+  /* Action buttons: left-aligned pill row that wraps */
+  .hadith-actions {
+    justify-content: flex-start;
+    gap: 0.4rem;
+    padding-top: 1rem;
+    margin-top: 1.25rem;
+  }
+
+  .action-btn {
+    font-size: 0.78rem !important;
+    padding: 0.42rem 0.8rem !important;
+    min-height: 34px;
+  }
+
+  /* Pagination buttons — full width, taller touch target */
+  .hadith-page-nav {
+    flex-direction: row;
+    gap: 0.75rem;
+  }
+
+  /* Chapter header compact */
+  .chapter-header {
+    margin-bottom: 2rem;
+  }
+
+  .chapter-title-arabic {
+    font-size: 2rem;
+  }
+
+  /* Scroll box fits phone viewport */
+  .hadith-scroll-box {
+    max-height: calc(100dvh - 320px);
+    min-height: 120px;
+  }
+}
+
+/* ======================================
+   SMALL MOBILE — up to 600px
+   ====================================== */
 @media (max-width: 600px) {
   .setting-row {
     flex-direction: column;
@@ -1118,7 +1178,6 @@ body {
     width: 100% !important;
   }
   
-  /* Make settings buttons wrap nicely */
   .setting-row > div:last-child {
     display: flex;
     justify-content: flex-start;
@@ -1126,82 +1185,104 @@ body {
     gap: 0.5rem;
   }
 
-  /* Compact hadith cards on mobile */
-  .hadith-glass-panel {
-    padding: 2rem 1.5rem;
-    margin-bottom: 2.5rem;
-    border-radius: 20px;
-  }
-
-  /* Better action row on mobile: grid wrap */
-  .hadith-actions {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-    justify-items: center;
-  }
-
-  .action-btn {
-    width: 100%;
-    justify-content: center;
-    font-size: 0.78rem !important;
-    padding: 0.45rem 0.5rem;
-  }
-
-  /* Stat cards single row on mobile */
+  /* Stat cards stay 3-col but smaller */
   .dashboard-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 0.75rem;
   }
 
   .stat-number {
-    font-size: 1.6rem;
+    font-size: 1.5rem;
   }
 
   .stat-card {
-    padding: 1.25rem 0.75rem;
+    padding: 1rem 0.5rem;
+  }
+
+  .stat-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.5px;
   }
 }
 
+/* ======================================
+   EXTRA SMALL — up to 480px
+   ====================================== */
 @media (max-width: 480px) {
-  /* Prevent floating bottom bar overflow on extra narrow devices */
+  /* Bottom nav bar */
   .bottom-nav-bar {
-    width: 94% !important;
-    padding: 0.4rem 0.6rem !important;
-    gap: 0.2rem !important;
-    bottom: 1rem !important;
-  }
-  
-  .nav-item-btn {
-    padding: 0.45rem 0.55rem !important;
-    gap: 0.2rem !important;
-    font-size: 0.7rem !important;
-  }
-  
-  .nav-item-btn svg {
-    width: 16px !important;
-    height: 16px !important;
-  }
-  
-  /* 2-column action grid on very small screens */
-  .hadith-actions {
-    grid-template-columns: repeat(3, 1fr) !important;
-  }
-  
-  /* Adjust margins on very small devices */
-  .reading-container {
-    padding-top: 2rem !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
+    width: 96% !important;
+    padding: 0.35rem 0.4rem !important;
+    gap: 0 !important;
+    bottom: 0.6rem !important;
   }
 
-  /* Welcome header compact */
+  .nav-item-btn {
+    padding: 0.45rem 0.6rem !important;
+    gap: 0.15rem !important;
+    font-size: 0.68rem !important;
+    flex: 1;
+  }
+
+  .nav-item-btn svg {
+    width: 17px !important;
+    height: 17px !important;
+  }
+
+  /* Hide button labels on very small screens — icon only */
+  .nav-item-btn span {
+    display: none !important;
+  }
+
+  /* Action buttons: hide text, show icon only to save space */
+  .action-btn span {
+    display: none;
+  }
+
+  .action-btn {
+    padding: 0.55rem !important;
+    min-width: 36px;
+    min-height: 36px;
+    justify-content: center;
+    border-radius: 50% !important;
+  }
+
+  .hadith-actions {
+    gap: 0.35rem !important;
+    justify-content: space-around !important;
+  }
+
+  /* Adjust reading container */
+  .reading-container {
+    padding: 2.5rem 0.75rem 8rem !important;
+  }
+
+  /* Scroll box on very small screen */
+  .hadith-scroll-box {
+    max-height: calc(100dvh - 300px) !important;
+  }
+
+  /* Welcome header */
   .welcome-header {
-    padding: 2rem 1.25rem;
+    padding: 1.75rem 1rem;
+    border-radius: 20px;
   }
 
   .welcome-header h1 {
-    font-size: 2.2rem;
+    font-size: 2rem;
+  }
+
+  .welcome-header p {
+    font-size: 0.88rem;
+  }
+
+  /* Chapter title */
+  .chapter-title-arabic {
+    font-size: 1.8rem;
+  }
+
+  .chapter-title-english {
+    font-size: 0.95rem;
   }
 }
 
