@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Home,
@@ -24,7 +24,9 @@ import {
   Database,
   Volume2,
   VolumeX,
-  Copy
+  Copy,
+  Download,
+  CheckCircle
 } from 'lucide-react';
 import { db, isSupabaseConfigured } from './supabaseClient';
 import { ruwaatsData } from './ruwaats';
@@ -147,7 +149,16 @@ const translations = {
     listen: "Listen",
     stop: "Stop",
     copyArabic: "Copy Arabic",
-    copyEnglish: "Copy English"
+    copyEnglish: "Copy English",
+    hadithsRead: "Hadiths Read",
+    readJourney: "Reading Journey",
+    offlineAvailable: "Offline Ready",
+    onlineOnly: "Online Only",
+    download: "Download",
+    downloading: "Downloading...",
+    downloaded: "Downloaded",
+    markRead: "Mark Read",
+    markUnread: "Mark Unread"
   },
   arabic: {
     home: "الرئيسية",
@@ -261,7 +272,16 @@ const translations = {
     listen: "استمع",
     stop: "إيقاف",
     copyArabic: "نسخ العربي",
-    copyEnglish: "نسخ الترجمة"
+    copyEnglish: "نسخ الترجمة",
+    hadithsRead: "الأحاديث المقروءة",
+    readJourney: "مسيرة القراءة",
+    offlineAvailable: "متوفر دون اتصال",
+    onlineOnly: "متوفر بالاتصال فقط",
+    download: "تحميل",
+    downloading: "جاري التحميل...",
+    downloaded: "تم التحميل",
+    markRead: "تحديد كمقروء",
+    markUnread: "تحديد كغير مقروء"
   }
 };
 
@@ -297,6 +317,56 @@ const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [playingHadithId, setPlayingHadithId] = useState<number | null>(null);
   const [committedSearchQuery, setCommittedSearchQuery] = useState('');
+
+  // Premium PWA States (Reading progress tracking and Offline Chapter Downloader)
+  const [readHadithIds, setReadHadithIds] = useState<Set<number>>(() => {
+    try {
+      const saved = localStorage.getItem('bukhari_read_hadiths');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const [cachedChapterIds, setCachedChapterIds] = useState<Set<number>>(() => {
+    const cached = new Set<number>();
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('bukhari_hadiths_chapter_')) {
+        const id = parseInt(key.replace('bukhari_hadiths_chapter_', ''), 10);
+        if (!isNaN(id)) {
+          cached.add(id);
+        }
+      }
+    }
+    return cached;
+  });
+
+  const [downloadingChapters, setDownloadingChapters] = useState<Record<number, boolean>>({});
+
+  // Memoized Chapter progress computations
+  const chapterProgressMap = useMemo(() => {
+    const map: Record<number, { total: number; read: number; percent: number }> = {};
+    cachedChapterIds.forEach(chId => {
+      try {
+        const localData = localStorage.getItem(`bukhari_hadiths_chapter_${chId}`);
+        if (localData) {
+          const list = JSON.parse(localData) as { id: number }[];
+          if (Array.isArray(list) && list.length > 0) {
+            const readCount = list.filter(h => readHadithIds.has(h.id)).length;
+            map[chId] = {
+              total: list.length,
+              read: readCount,
+              percent: Math.round((readCount / list.length) * 100)
+            };
+          }
+        }
+      } catch (e) {
+        console.warn("Error computing progress for chapter", chId, e);
+      }
+    });
+    return map;
+  }, [cachedChapterIds, readHadithIds]);
 
   // Settings state
   const [arabicFontSize, setArabicFontSize] = useState<number>(() => {
@@ -858,14 +928,62 @@ const App: React.FC = () => {
     }
   };
 
-  // Share Function
+  // Share Function with Native Support
   const handleShare = (hadith: Hadith) => {
     const translationPart = displayMode !== 'arabic-only' && hadith.translation 
       ? `\n\n[Translation]\n${hadith.translation}` 
       : '';
-    const shareText = `Sahih al-Bukhari (Hadith ${hadith.number})\n\n[Arabic]\n${hadith.arabic}${translationPart}\n\n- Spiritual Reading Space`;
-    navigator.clipboard.writeText(shareText);
-    triggerToast(t.copied);
+    const shareText = `✦ Sahih al-Bukhari (Hadith ${hadith.number}) ✦\n\n[Arabic]\n${hadith.arabic}${translationPart}\n\n— Shared via Ummuhat`;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: `Hadith ${hadith.number} - Sahih al-Bukhari`,
+        text: shareText
+      }).catch((err) => {
+        console.warn('Native share failed, copying to clipboard instead:', err);
+        navigator.clipboard.writeText(shareText);
+        triggerToast(t.copied);
+      });
+    } else {
+      navigator.clipboard.writeText(shareText);
+      triggerToast(t.copied);
+    }
+  };
+
+  // Toggle Hadith Read Status
+  const handleToggleRead = (hadithId: number) => {
+    setReadHadithIds(prev => {
+      const next = new Set(prev);
+      if (next.has(hadithId)) {
+        next.delete(hadithId);
+        triggerToast(language === 'arabic' ? 'تم التحديد كغير مقروء' : 'Marked as unread');
+      } else {
+        next.add(hadithId);
+        triggerToast(language === 'arabic' ? 'تم التحديد كمقروء' : 'Marked as read');
+      }
+      localStorage.setItem('bukhari_read_hadiths', JSON.stringify(Array.from(next)));
+      return next;
+    });
+  };
+
+  // Download Chapter Offline Downloader
+  const handleDownloadChapter = async (chapterId: number) => {
+    if (downloadingChapters[chapterId]) return;
+    setDownloadingChapters(prev => ({ ...prev, [chapterId]: true }));
+    try {
+      await api.fetchHadithsByChapter(chapterId);
+      setCachedChapterIds(prev => {
+        const next = new Set(prev);
+        next.add(chapterId);
+        return next;
+      });
+      triggerToast(language === 'arabic' ? 'تم تحميل الباب للقراءة دون اتصال.' : 'Chapter downloaded for offline reading.');
+    } catch (err) {
+      console.error("Failed to download chapter:", err);
+      triggerToast(language === 'arabic' ? 'فشل تحميل الباب. يرجى التحقق من الاتصال.' : 'Failed to download chapter. Please check connection.');
+    } finally {
+      setDownloadingChapters(prev => ({ ...prev, [chapterId]: false }));
+    }
   };
 
   const handleCopyArabic = (hadith: Hadith) => {
@@ -1076,6 +1194,12 @@ const App: React.FC = () => {
                       {formatNumber('7,276')}
                     </div>
                     <div className="stat-label">{t.hadithsCompiled}</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-number">
+                      {formatNumber(readHadithIds.size)}
+                    </div>
+                    <div className="stat-label">{t.hadithsRead}</div>
                   </div>
                   <div className="stat-card">
                     <div className="stat-number">
@@ -1348,39 +1472,92 @@ const App: React.FC = () => {
 
                     {/* Chapters grid */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                      {chapters.map(chapter => (
-                        <div 
-                          key={chapter.id} 
-                          className="glass-card chapter-card" 
-                          style={{ 
-                            padding: '1.5rem', 
-                            cursor: 'pointer', 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center',
-                            transition: 'all 0.2s ease',
-                            border: '1px solid var(--glass-border)'
-                          }}
-                          onClick={() => handleSelectChapter(chapter.id)}
-                          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-emerald)'}
-                          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--glass-border)'}
-                        >
-                          <div>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                              {t.chapterShort} {formatNumber(chapter.chapterNumber)}
-                            </span>
-                            <h3 className="alternative-title" style={{ fontSize: '1.15rem', fontWeight: 500, margin: '0.2rem 0', color: 'var(--text-primary)' }}>
-                              {chapter.chapterEnglish}
-                            </h3>
+                      {chapters.map(chapter => {
+                        const isCached = cachedChapterIds.has(chapter.id);
+                        const progress = chapterProgressMap[chapter.id];
+                        const isDownloading = downloadingChapters[chapter.id];
+
+                        return (
+                          <div 
+                            key={chapter.id} 
+                            className="glass-card chapter-card" 
+                            style={{ 
+                              padding: '1.5rem', 
+                              cursor: 'pointer', 
+                              display: 'flex', 
+                              flexDirection: 'column',
+                              gap: '0.8rem',
+                              transition: 'all 0.2s ease',
+                              border: '1px solid var(--glass-border)'
+                            }}
+                            onClick={() => handleSelectChapter(chapter.id)}
+                            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-emerald)'}
+                            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+                              <div style={{ textAlign: language === 'arabic' ? 'right' : 'left' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.2rem', justifyContent: language === 'arabic' ? 'flex-end' : 'flex-start' }}>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                    {t.chapterShort} {formatNumber(chapter.chapterNumber)}
+                                  </span>
+                                  {isCached ? (
+                                    <span className="offline-badge" title={t.offlineAvailable}>
+                                      <CheckCircle size={10} /> {t.offlineAvailable}
+                                    </span>
+                                  ) : (
+                                    <span className="online-badge" title={t.onlineOnly}>
+                                      {t.onlineOnly}
+                                    </span>
+                                  )}
+                                </div>
+                                <h3 className="alternative-title" style={{ fontSize: '1.15rem', fontWeight: 500, margin: '0.2rem 0', color: 'var(--text-primary)', textAlign: language === 'arabic' ? 'right' : 'left' }}>
+                                  {chapter.chapterEnglish}
+                                </h3>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '1.2rem', color: 'var(--accent-emerald)' }}>
+                                  {chapter.chapterArabic}
+                                </span>
+                                
+                                {/* Download button or arrow indicator */}
+                                {!isCached ? (
+                                  <button
+                                    type="button"
+                                    disabled={isDownloading}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDownloadChapter(chapter.id);
+                                    }}
+                                    className="download-badge-btn"
+                                    title={isDownloading ? t.downloading : t.download}
+                                    style={{ margin: 0 }}
+                                  >
+                                    <Download size={14} style={{ animation: isDownloading ? 'shimmer-line 1.5s infinite' : 'none' }} />
+                                  </button>
+                                ) : (
+                                  language === 'arabic' ? <ChevronLeft size={18} style={{ color: 'var(--text-secondary)' }} /> : <ChevronRight size={18} style={{ color: 'var(--text-secondary)' }} />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Progress bar if cached */}
+                            {isCached && progress && (
+                              <div style={{ width: '100%', marginTop: '0.4rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                                  <span>{formatNumber(progress.read)} / {formatNumber(progress.total)} {language === 'arabic' ? 'قُرئت' : 'read'}</span>
+                                  <span>{formatNumber(progress.percent)}%</span>
+                                </div>
+                                <div className="chapter-progress-container">
+                                  <div 
+                                    className="chapter-progress-bar" 
+                                    style={{ width: `${progress.percent}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '1.2rem', color: 'var(--accent-emerald)' }}>
-                              {chapter.chapterArabic}
-                            </span>
-                            {language === 'arabic' ? <ChevronLeft size={18} style={{ color: 'var(--text-secondary)' }} /> : <ChevronRight size={18} style={{ color: 'var(--text-secondary)' }} />}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -1500,6 +1677,10 @@ const App: React.FC = () => {
                                 <button className={`action-btn ${isBookmarked ? 'active' : ''}`} onClick={() => handleToggleBookmark(hadith)}>
                                   <Bookmark size={15} fill={isBookmarked ? "currentColor" : "none"} />
                                   <span>{isBookmarked ? t.saved : t.save}</span>
+                                </button>
+                                <button className={`action-btn ${readHadithIds.has(hadith.id) ? 'active' : ''}`} onClick={() => handleToggleRead(hadith.id)}>
+                                  <CheckCircle size={15} fill={readHadithIds.has(hadith.id) ? "currentColor" : "none"} style={{ color: readHadithIds.has(hadith.id) ? 'var(--accent-emerald)' : 'inherit' }} />
+                                  <span>{readHadithIds.has(hadith.id) ? t.markUnread : t.markRead}</span>
                                 </button>
                                 <button className={`action-btn ${hasNote ? 'active' : ''}`} onClick={() => handleOpenNoteModal(hadith)}>
                                   <FileText size={15} />
@@ -1685,6 +1866,14 @@ const App: React.FC = () => {
                                         </button>
 
                                         <button 
+                                          className={`action-btn ${readHadithIds.has(hadith.id) ? 'active' : ''}`}
+                                          onClick={() => handleToggleRead(hadith.id)}
+                                        >
+                                          <CheckCircle size={15} fill={readHadithIds.has(hadith.id) ? "currentColor" : "none"} style={{ color: readHadithIds.has(hadith.id) ? 'var(--accent-emerald)' : 'inherit' }} />
+                                          <span>{readHadithIds.has(hadith.id) ? t.markUnread : t.markRead}</span>
+                                        </button>
+
+                                        <button 
                                           className={`action-btn ${hasNote ? 'active' : ''}`}
                                           onClick={() => handleOpenNoteModal(hadith)}
                                         >
@@ -1837,6 +2026,14 @@ const App: React.FC = () => {
                                           >
                                             <Bookmark size={15} fill={isBookmarked ? "currentColor" : "none"} />
                                             <span>{isBookmarked ? t.saved : t.save}</span>
+                                          </button>
+
+                                          <button 
+                                            className={`action-btn ${readHadithIds.has(hadith.id) ? 'active' : ''}`}
+                                            onClick={() => handleToggleRead(hadith.id)}
+                                          >
+                                            <CheckCircle size={15} fill={readHadithIds.has(hadith.id) ? "currentColor" : "none"} style={{ color: readHadithIds.has(hadith.id) ? 'var(--accent-emerald)' : 'inherit' }} />
+                                            <span>{readHadithIds.has(hadith.id) ? t.markUnread : t.markRead}</span>
                                           </button>
 
                                           <button 
