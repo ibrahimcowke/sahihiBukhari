@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ummuhat-cache-v1';
+const CACHE_NAME = 'sahih-bukhari-cache-v1';
 
 const PRECACHE_ASSETS = [
   '/',
