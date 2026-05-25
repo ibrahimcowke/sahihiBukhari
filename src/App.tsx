@@ -170,7 +170,18 @@ const translations = {
     streakDays: "Days",
     goalAdjust: "Adjust Goal",
     goalReached: "Daily Goal Reached! 🎉",
-    shuffleHadith: "Shuffle Reflection"
+    shuffleHadith: "Shuffle Reflection",
+    notificationTitle: "Hadith Reminders",
+    notificationDesc: "Receive a daily reminder notification to read your Hadith.",
+    notificationEnable: "Enable Reminders",
+    notificationDisabled: "Disabled",
+    notificationGranted: "Reminders Enabled",
+    notificationDenied: "Permission Denied",
+    reminderTime: "Reminder Time",
+    goalReachedTitle: "Daily Goal Reached! 🎉",
+    goalReachedBody: "Congratulations! You have completed your daily reading goal of {0} Hadiths today.",
+    dailyReminderTitle: "Time for Reflection 📖",
+    dailyReminderBody: "Read your curated Hadith of the day from Sahih Al-Bukhari."
   },
   arabic: {
     home: "الرئيسية",
@@ -300,7 +311,18 @@ const translations = {
     streakDays: "أيام",
     goalAdjust: "تعديل الهدف",
     goalReached: "تم تحقيق الهدف اليومي! 🎉",
-    shuffleHadith: "تغيير الحديث"
+    shuffleHadith: "تغيير الحديث",
+    notificationTitle: "تنبيهات الأحاديث",
+    notificationDesc: "تلقي إشعار يومي يذكرك بقراءة الأحاديث والورد اليومي.",
+    notificationEnable: "تفعيل التنبيهات",
+    notificationDisabled: "موقوف",
+    notificationGranted: "التنبيهات مفعلة",
+    notificationDenied: "تم رفض الإذن",
+    reminderTime: "وقت التذكير",
+    goalReachedTitle: "تم تحقيق الهدف اليومي! 🎉",
+    goalReachedBody: "تهانينا! لقد أكملت هدف القراءة اليومي البالغ {0} أحاديث اليوم.",
+    dailyReminderTitle: "وقت التدبر والقراءة 📖",
+    dailyReminderBody: "اقرأ حديث اليوم وتدبر معانيه من صحيح البخاري."
   }
 };
 
@@ -437,6 +459,15 @@ const App: React.FC = () => {
   });
   const [showThemeSwatches, setShowThemeSwatches] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [remindersEnabled, setRemindersEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('sahihbukhari_reminders_enabled') === 'true';
+  });
+  const [reminderTime, setReminderTime] = useState<string>(() => {
+    return localStorage.getItem('sahihbukhari_reminder_time') || '09:00';
+  });
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
+    return (typeof window !== 'undefined' && 'Notification' in window) ? Notification.permission : 'default';
+  });
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [downloadAllCurrent, setDownloadAllCurrent] = useState(0);
@@ -601,6 +632,16 @@ const App: React.FC = () => {
     localStorage.setItem('ummuhat_reading_layout', readingLayout);
   }, [readingLayout]);
 
+  // Persist remindersEnabled preference
+  useEffect(() => {
+    localStorage.setItem('sahihbukhari_reminders_enabled', remindersEnabled ? 'true' : 'false');
+  }, [remindersEnabled]);
+
+  // Persist reminderTime preference
+  useEffect(() => {
+    localStorage.setItem('sahihbukhari_reminder_time', reminderTime);
+  }, [reminderTime]);
+
   // Save progress in page layout mode when current index changes
   useEffect(() => {
     if (readingLayout === 'page' && activeChapter && chapterHadiths.length > 0) {
@@ -670,6 +711,45 @@ const App: React.FC = () => {
       window.history.pushState({ tab: currentTab }, '', url.pathname + url.search + url.hash);
     }
   }, [currentTab]);
+
+  // Check and trigger daily reminder notifications when active
+  useEffect(() => {
+    if (!remindersEnabled || notificationPermission !== 'granted') return;
+
+    const checkReminder = () => {
+      const todayStr = getTodayDateString();
+      const lastReminderDate = localStorage.getItem('sahihbukhari_last_reminder_date');
+
+      // If already shown today, do nothing
+      if (lastReminderDate === todayStr) return;
+
+      const [targetHour, targetMinute] = reminderTime.split(':').map(Number);
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+
+      // If the current time is past the target time, trigger notification
+      if (currentHour > targetHour || (currentHour === targetHour && currentMinute >= targetMinute)) {
+        try {
+          new Notification(t.dailyReminderTitle, {
+            body: t.dailyReminderBody,
+            icon: '/app-icon.png',
+            badge: '/favicon.svg'
+          });
+          localStorage.setItem('sahihbukhari_last_reminder_date', todayStr);
+        } catch (err) {
+          console.warn("Failed to fire daily reminder notification", err);
+        }
+      }
+    };
+
+    // Check immediately on mount/update
+    checkReminder();
+
+    // Check every minute
+    const interval = setInterval(checkReminder, 60000);
+    return () => clearInterval(interval);
+  }, [remindersEnabled, reminderTime, notificationPermission, language]);
 
   // Scroll listener for bottom navigation bar visibility (only in chapter reading view)
   useEffect(() => {
@@ -1096,7 +1176,20 @@ const App: React.FC = () => {
           // Check if this read completes the daily goal
           const todayCount = Object.values(nextHistory).filter(date => date === todayStr).length;
           if (todayCount === dailyGoal) {
-            setTimeout(() => triggerToast(t.goalReached), 600);
+            setTimeout(() => {
+              triggerToast(t.goalReached);
+              if (remindersEnabled && Notification.permission === 'granted') {
+                try {
+                  new Notification(t.goalReachedTitle, {
+                    body: t.goalReachedBody.replace('{0}', formatNumber(dailyGoal)),
+                    icon: '/app-icon.png',
+                    badge: '/favicon.svg'
+                  });
+                } catch (err) {
+                  console.warn("Failed to fire goal reached notification", err);
+                }
+              }
+            }, 600);
           }
           return nextHistory;
         });
@@ -1146,6 +1239,30 @@ const App: React.FC = () => {
       localStorage.setItem('bukhari_read_hadiths', JSON.stringify(Array.from(next)));
       return next;
     });
+  };
+
+  // Request OS Notification Permission
+  const handleRequestPermission = async () => {
+    if (!('Notification' in window)) {
+      triggerToast(language === 'arabic' ? 'المتصفح لا يدعم التنبيهات' : 'Notifications not supported by this browser');
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        setRemindersEnabled(true);
+        triggerToast(t.notificationGranted);
+        new Notification(t.notificationGranted, {
+          body: t.dailyReminderBody,
+          icon: '/app-icon.png'
+        });
+      } else if (permission === 'denied') {
+        triggerToast(t.notificationDenied);
+      }
+    } catch (err) {
+      console.error("Error requesting notification permission", err);
+    }
   };
 
   // Download Chapter Offline Downloader
@@ -2952,6 +3069,75 @@ const App: React.FC = () => {
                         {t.layoutPage}
                       </button>
                     </div>
+                  </div>
+
+                  {/* Hadith Reminders Setting Row */}
+                  <div className="setting-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h4 style={{ fontWeight: 500, marginBottom: '0.2rem' }}>{t.notificationTitle}</h4>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t.notificationDesc}</p>
+                      </div>
+                      
+                      <div>
+                        {notificationPermission !== 'granted' ? (
+                          <button 
+                            onClick={handleRequestPermission}
+                            className="primary-btn"
+                            style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}
+                          >
+                            {t.notificationEnable}
+                          </button>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                            <button 
+                              onClick={() => setRemindersEnabled(!remindersEnabled)}
+                              style={{ 
+                                background: remindersEnabled ? 'var(--accent-emerald)' : 'var(--input-bg)', 
+                                color: remindersEnabled ? 'white' : 'var(--text-primary)', 
+                                border: '1px solid var(--glass-border)', 
+                                padding: '0.5rem 1rem', 
+                                borderRadius: '10px', 
+                                fontSize: '0.85rem', 
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              {remindersEnabled ? (language === 'arabic' ? 'مفعل' : 'Enabled') : t.notificationDisabled}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {notificationPermission === 'granted' && remindersEnabled && (
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        padding: '0.8rem 1rem',
+                        borderRadius: '12px',
+                        border: '1px solid var(--glass-border)',
+                        marginTop: '0.5rem'
+                      }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t.reminderTime}</span>
+                        <input 
+                          type="time" 
+                          value={reminderTime}
+                          onChange={(e) => setReminderTime(e.target.value)}
+                          style={{
+                            background: 'var(--input-bg)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--glass-border)',
+                            borderRadius: '8px',
+                            padding: '0.3rem 0.6rem',
+                            fontSize: '0.85rem',
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Arabic Font Family */}

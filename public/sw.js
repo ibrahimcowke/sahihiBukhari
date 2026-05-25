@@ -160,3 +160,22 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(event.request))
   );
 });
+
+// Handle Notification Clicks to Focus or Open the App
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // If a window is already open, focus it
+      for (const client of clientList) {
+        if ('focus' in client) {
+          return client.focus();
+        }
+      }
+      // If no window is open, open the home page
+      if (self.clients.openWindow) {
+        return self.clients.openWindow('/?utm_source=notification');
+      }
+    })
+  );
+});
