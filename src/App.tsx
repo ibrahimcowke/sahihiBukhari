@@ -624,6 +624,52 @@ const App: React.FC = () => {
     };
   }, [currentTab, activeChapter, currentHadithIndex]);
 
+  // URL routing / shortcut support for PWA navigation
+  useEffect(() => {
+    const handleUrlNavigation = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['home', 'chapters', 'narrators', 'bookmarks', 'settings'].includes(tabParam)) {
+        setCurrentTab(tabParam as Tab);
+        if (tabParam !== 'chapters') {
+          setActiveChapter(null);
+          setSearchActive(false);
+        }
+        return;
+      }
+
+      const hash = window.location.hash.replace('#', '');
+      if (hash && ['home', 'chapters', 'narrators', 'bookmarks', 'settings'].includes(hash)) {
+        setCurrentTab(hash as Tab);
+        if (hash !== 'chapters') {
+          setActiveChapter(null);
+          setSearchActive(false);
+        }
+      }
+    };
+
+    handleUrlNavigation();
+
+    window.addEventListener('popstate', handleUrlNavigation);
+    window.addEventListener('hashchange', handleUrlNavigation);
+
+    return () => {
+      window.removeEventListener('popstate', handleUrlNavigation);
+      window.removeEventListener('hashchange', handleUrlNavigation);
+    };
+  }, []);
+
+  // Synchronize currentTab state changes back to the URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const currentParam = params.get('tab');
+    if (currentParam !== currentTab) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', currentTab);
+      window.history.pushState({ tab: currentTab }, '', url.pathname + url.search + url.hash);
+    }
+  }, [currentTab]);
+
   // Scroll listener for bottom navigation bar visibility (only in chapter reading view)
   useEffect(() => {
     if (currentTab !== 'chapters' || !activeChapter) {

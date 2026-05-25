@@ -2,11 +2,21 @@
   "name": "Ummuhat - Sahih Al-Bukhari",
   "short_name": "Ummuhat",
   "description": "A beautiful, premium, offline Hadith reader for Sahih Al-Bukhari.",
-  "start_url": "/",
+  "start_url": "/?utm_source=pwa",
+  "id": "/?utm_source=pwa",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#080D0A",
   "theme_color": "#080D0A",
-  "orientation": "portrait-primary",
+  "orientation": "any",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": [
+    "books",
+    "education",
+    "reference",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "/app-icon.png",
@@ -19,6 +29,58 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/desktop-screenshot.png",
+      "sizes": "1024x768",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/mobile-screenshot.png",
+      "sizes": "640x1136",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Chapters Index",
+      "short_name": "Chapters",
+      "description": "Browse the 99 chapters of Sahih Al-Bukhari",
+      "url": "/?tab=chapters",
+      "icons": [
+        {
+          "src": "/app-icon.png",
+          "sizes": "512x512"
+        }
+      ]
+    },
+    {
+      "name": "Narrators Directory",
+      "short_name": "Narrators",
+      "description": "Explore prominent narrators (Ruwaat)",
+      "url": "/?tab=narrators",
+      "icons": [
+        {
+          "src": "/app-icon.png",
+          "sizes": "512x512"
+        }
+      ]
+    },
+    {
+      "name": "Saved Moments",
+      "short_name": "Saved",
+      "description": "View bookmarked Hadiths and reflections",
+      "url": "/?tab=bookmarks",
+      "icons": [
+        {
+          "src": "/app-icon.png",
+          "sizes": "512x512"
+        }
+      ]
     }
   ]
 }
