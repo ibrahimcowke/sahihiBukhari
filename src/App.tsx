@@ -1058,7 +1058,7 @@ const App: React.FC = () => {
     const translationPart = displayMode !== 'arabic-only' && hadith.translation 
       ? `\n\n[Translation]\n${hadith.translation}` 
       : '';
-    const shareText = `✦ Sahih al-Bukhari (Hadith ${hadith.number}) ✦\n\n[Arabic]\n${hadith.arabic}${translationPart}\n\n— Shared via Ummuhat`;
+    const shareText = `✦ Sahih al-Bukhari (Hadith ${hadith.number}) ✦\n\n[Arabic]\n${hadith.arabic}${translationPart}\n\n— Shared via Sahih Al-Bukhari`;
     
     if (navigator.share) {
       navigator.share({
@@ -1531,7 +1531,7 @@ const App: React.FC = () => {
                     </button>
                   </div>
 
-                  <img src="/app-icon.png" alt="Ummuhat Logo" className="welcome-app-logo" />
+                  <img src="/app-icon.png" alt="Sahih Bukhari Logo" className="welcome-app-logo" />
                   <div className="welcome-tag">
                     <Sparkles size={18} />
                     <span>{t.spiritualOasis}</span>
@@ -1834,7 +1834,7 @@ const App: React.FC = () => {
                       )}
                     </p>
                     <p style={{ marginTop: '0.2rem' }}>
-                      &copy; {new Date().getFullYear()} Ummuhat. {language === 'arabic' ? 'جميع الحقوق محفوظة.' : 'All rights reserved.'} | {' '}
+                      &copy; {new Date().getFullYear()} Sahih Al-Bukhari. {language === 'arabic' ? 'جميع الحقوق محفوظة.' : 'All rights reserved.'} | {' '}
                       <button 
                         type="button" 
                         onClick={() => setShowPrivacyModal(true)}
@@ -3358,7 +3358,7 @@ const App: React.FC = () => {
           >
             {/* Sidebar Brand Header (Desktop Sidebar only) */}
             <div className="nav-brand-header">
-              <img src="/app-icon.png" alt="Ummuhat Logo" className="nav-brand-logo" />
+              <img src="/app-icon.png" alt="Sahih Bukhari Logo" className="nav-brand-logo" />
               <h3 style={{ fontFamily: 'var(--font-arabic)', fontSize: '1.4rem' }}>{t.bukhariTitle}</h3>
             </div>
 
@@ -3569,7 +3569,7 @@ const App: React.FC = () => {
                 {language === 'arabic' ? (
                   <>
                     <p style={{ color: 'var(--accent-gold)', fontWeight: 500 }}>آخر تحديث: مايو ٢٠٢٦</p>
-                    <p>نحن نقدر خصوصيتك بشكل كبير. تطبيق <strong>أمهات (صحيح البخاري)</strong> مصمم ليعمل محلياً بالكامل ولا يقوم بجمع، تخزين، أو نقل أي بيانات شخصية خاصة بك إلى أي خوادم خارجية.</p>
+                    <p>نحن نقدر خصوصيتك بشكل كبير. تطبيق <strong>صحيح البخاري</strong> مصمم ليعمل محلياً بالكامل ولا يقوم بجمع، تخزين، أو نقل أي بيانات شخصية خاصة بك إلى أي خوادم خارجية.</p>
                     <p><strong>١. تخزين البيانات محلياً:</strong> جميع الملاحظات الشخصية، الإشارات المرجعية، إعدادات السمات، وحالة تقدم القراءة يتم تخزينها محلياً على جهازك فقط (باستخدام LocalStorage و IndexedDB المدمجين في متصفحك).</p>
                     <p><strong>٢. تكامل قاعدة البيانات الاختياري:</strong> إذا قمت بإدخال إعدادات Supabase الخاصة بك للنسخ الاحتياطي السحابي، فسيتم إرسال بياناتك فقط إلى مثيل قاعدة البيانات الخاص بك مباشرة ولا يمكننا الوصول إليها.</p>
                     <p><strong>٣. عدم وجود إعلانات أو تعقب:</strong> لا يحتوي هذا التطوق على أي إعلانات، أو أدوات تتبع جهات خارجية.</p>
@@ -3577,7 +3577,7 @@ const App: React.FC = () => {
                 ) : (
                   <>
                     <p style={{ color: 'var(--accent-gold)', fontWeight: 500 }}>Last Updated: May 2026</p>
-                    <p>We deeply respect your privacy. <strong>Ummuhat (Sahih Al-Bukhari)</strong> is designed to operate fully offline and does not collect, store, or transmit any of your personal data to external servers.</p>
+                    <p>We deeply respect your privacy. <strong>Sahih Al-Bukhari</strong> is designed to operate fully offline and does not collect, store, or transmit any of your personal data to external servers.</p>
                     <p><strong>1. Local Storage:</strong> All your personal notes, bookmarks, configuration settings, and reading progress are stored locally on your device (using browser LocalStorage and IndexedDB).</p>
                     <p><strong>2. Database Integration:</strong> If you choose to configure custom Supabase database settings for cloud synchronization, your data is sent directly to your own private database instance. We do not have access to it.</p>
                     <p><strong>3. No Ads or Tracking:</strong> There are no third-party advertisements or tracking profiles integrated into this app.</p>
