@@ -436,6 +436,7 @@ const App: React.FC = () => {
     return (localStorage.getItem('ummuhat_theme') as Theme) || 'night';
   });
   const [showThemeSwatches, setShowThemeSwatches] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [downloadAllCurrent, setDownloadAllCurrent] = useState(0);
@@ -1780,6 +1781,78 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Dashboard Footer */}
+                <footer className="dashboard-footer" style={{
+                  marginTop: '4.5rem',
+                  paddingTop: '2.5rem',
+                  borderTop: '1px solid var(--glass-border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '1.5rem',
+                  textAlign: 'center'
+                }}>
+                  {/* Spiritual Prayer Card */}
+                  <div className="prayer-card" style={{
+                    background: 'linear-gradient(135deg, rgba(210, 183, 115, 0.05) 0%, rgba(46, 159, 133, 0.05) 100%)',
+                    border: '1px solid rgba(210, 183, 115, 0.25)',
+                    borderRadius: '16px',
+                    padding: '1.5rem 2rem',
+                    maxWidth: '550px',
+                    width: '100%',
+                    position: 'relative',
+                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
+                  }}>
+                    <span style={{ display: 'block', fontSize: '1.3rem', marginBottom: '0.5rem', color: 'var(--accent-gold)' }}>🤲</span>
+                    <p style={{
+                      fontStyle: 'italic',
+                      lineHeight: '1.6',
+                      color: 'var(--text-primary)',
+                      fontFamily: language === 'arabic' ? 'var(--font-arabic)' : 'inherit',
+                      fontSize: language === 'arabic' ? '1.25rem' : '0.92rem'
+                    }}>
+                      {language === 'arabic' ? (
+                        "«نسألك يا الله بفضلك وكرمك أن تغفر لي ولوالدي ولأهلي وعائلتي، وأن ترزقني الذرية الصالحة الطيبة المعافاة يا ذا الجلال والإكرام. فضلاً، لا تنسونا وعائلتنا من صالح دعائكم.»"
+                      ) : (
+                        "\"Please pray for me, my parents, and my family. And pray that Allah grants me a healthy, righteous baby. Please keep us in your sincere prayers.\""
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Copyright and Credits */}
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                    <p>
+                      {language === 'arabic' ? (
+                        <>
+                          تم التطوير بواسطة <strong>Ibrahimcowke</strong> بمساعدة الذكاء الاصطناعي. التطبيق مجاني ومفتوح المصدر.
+                        </>
+                      ) : (
+                        <>
+                          Developed by <strong>Ibrahimcowke</strong> using AI. It is free and open-source.
+                        </>
+                      )}
+                    </p>
+                    <p style={{ marginTop: '0.2rem' }}>
+                      &copy; {new Date().getFullYear()} Ummuhat. {language === 'arabic' ? 'جميع الحقوق محفوظة.' : 'All rights reserved.'} | {' '}
+                      <button 
+                        type="button" 
+                        onClick={() => setShowPrivacyModal(true)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--accent-emerald)',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          fontSize: '0.8rem',
+                          padding: 0
+                        }}
+                      >
+                        {language === 'arabic' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+                      </button>
+                    </p>
+                  </div>
+                </footer>
               </motion.div>
             )}
 
@@ -3447,6 +3520,79 @@ const App: React.FC = () => {
                     </button>
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Privacy Policy Modal Popup */}
+      <AnimatePresence>
+        {showPrivacyModal && (
+          <motion.div 
+            className="overlay-content"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div 
+              className="modal-card"
+              initial={{ y: 50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 50, opacity: 0 }}
+              style={{ maxWidth: '600px' }}
+            >
+              <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ fontWeight: 500, fontSize: '1.25rem', color: 'var(--accent-gold)' }}>
+                  {language === 'arabic' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+                </h3>
+                <button 
+                  onClick={() => setShowPrivacyModal(false)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="modal-body" style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '1rem', 
+                overflowY: 'auto', 
+                maxHeight: '60vh', 
+                fontSize: '0.9rem', 
+                color: 'var(--text-secondary)', 
+                lineHeight: 1.65, 
+                textAlign: language === 'arabic' ? 'right' : 'left', 
+                direction: language === 'arabic' ? 'rtl' : 'ltr' 
+              }}>
+                {language === 'arabic' ? (
+                  <>
+                    <p style={{ color: 'var(--accent-gold)', fontWeight: 500 }}>آخر تحديث: مايو ٢٠٢٦</p>
+                    <p>نحن نقدر خصوصيتك بشكل كبير. تطبيق <strong>أمهات (صحيح البخاري)</strong> مصمم ليعمل محلياً بالكامل ولا يقوم بجمع، تخزين، أو نقل أي بيانات شخصية خاصة بك إلى أي خوادم خارجية.</p>
+                    <p><strong>١. تخزين البيانات محلياً:</strong> جميع الملاحظات الشخصية، الإشارات المرجعية، إعدادات السمات، وحالة تقدم القراءة يتم تخزينها محلياً على جهازك فقط (باستخدام LocalStorage و IndexedDB المدمجين في متصفحك).</p>
+                    <p><strong>٢. تكامل قاعدة البيانات الاختياري:</strong> إذا قمت بإدخال إعدادات Supabase الخاصة بك للنسخ الاحتياطي السحابي، فسيتم إرسال بياناتك فقط إلى مثيل قاعدة البيانات الخاص بك مباشرة ولا يمكننا الوصول إليها.</p>
+                    <p><strong>٣. عدم وجود إعلانات أو تعقب:</strong> لا يحتوي هذا التطوق على أي إعلانات، أو أدوات تتبع جهات خارجية.</p>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ color: 'var(--accent-gold)', fontWeight: 500 }}>Last Updated: May 2026</p>
+                    <p>We deeply respect your privacy. <strong>Ummuhat (Sahih Al-Bukhari)</strong> is designed to operate fully offline and does not collect, store, or transmit any of your personal data to external servers.</p>
+                    <p><strong>1. Local Storage:</strong> All your personal notes, bookmarks, configuration settings, and reading progress are stored locally on your device (using browser LocalStorage and IndexedDB).</p>
+                    <p><strong>2. Database Integration:</strong> If you choose to configure custom Supabase database settings for cloud synchronization, your data is sent directly to your own private database instance. We do not have access to it.</p>
+                    <p><strong>3. No Ads or Tracking:</strong> There are no third-party advertisements or tracking profiles integrated into this app.</p>
+                  </>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1rem' }}>
+                <button 
+                  onClick={() => setShowPrivacyModal(false)}
+                  className="primary-btn"
+                  style={{ padding: '0.6rem 1.4rem' }}
+                >
+                  {language === 'arabic' ? 'إغلاق' : 'Close'}
+                </button>
               </div>
             </motion.div>
           </motion.div>
