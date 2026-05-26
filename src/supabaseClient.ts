@@ -130,11 +130,41 @@ export function mapDbHadith(row: Partial<DbHadith> | null | undefined): Hadith {
   };
 }
 
+let isSchemaValid = true;
+
+// Detect missing migration columns/tables and safely bypass sync to avoid data loss
+function checkSchemaError(error: any) {
+  if (error) {
+    // Code 42703: undefined_column (e.g. user_id missing)
+    // Code 42P01: undefined_table (relation does not exist)
+    // Code PGRST205: Table not found in schema cache
+    if (
+      error.code === '42703' || 
+      error.code === '42P01' || 
+      error.code === 'PGRST205' || 
+      (error.message && (
+        error.message.includes('column "user_id" does not exist') ||
+        error.message.includes('relation "public.user_progress" does not exist')
+      ))
+    ) {
+      if (isSchemaValid) {
+        console.warn("⚠️ Supabase schema mismatch detected. Please run the SQL migration script in your Supabase dashboard to enable cloud sync. Operating in resilient offline LocalStorage mode.");
+        isSchemaValid = false;
+      }
+    }
+  }
+}
+
 // Database API with Local Fallbacks and User Isolation
 export const db = {
+  // Check schema status
+  getIsSchemaValid(): boolean {
+    return isSchemaValid;
+  },
+
   // Ensure hadith is cached in the DB to satisfy foreign keys
   async ensureHadithExists(hadith: Hadith): Promise<void> {
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       try {
         const { data, error } = await supabase
           .from('hadiths')
@@ -142,7 +172,8 @@ export const db = {
           .eq('id', hadith.id)
           .maybeSingle();
         
-        if (!error && !data) {
+        checkSchemaError(error);
+        if (!error && !data && isSchemaValid) {
           // Doesn't exist, insert it
           const { error: insError } = await supabase
             .from('hadiths')
@@ -158,9 +189,7 @@ export const db = {
               bab_arabic: hadith.babArabic,
               bab_english: hadith.babEnglish
             }]);
-          if (insError) {
-            console.error("Failed to cache hadith in Supabase:", insError);
-          }
+          checkSchemaError(insError);
         }
       } catch (err) {
         console.error("Failed to ensure hadith exists in database:", err);
@@ -172,7 +201,7 @@ export const db = {
 
   // Get Bookmarked Hadiths with their details
   async getBookmarkedHadiths(): Promise<Hadith[]> {
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       try {
         const userId = getOrInitUserId();
         const { data, error } = await supabase
@@ -180,7 +209,8 @@ export const db = {
           .select('hadith_id, hadiths(*)')
           .eq('user_id', userId);
         
-        if (!error && data) {
+        checkSchemaError(error);
+        if (!error && data && isSchemaValid) {
           return data
             .map(item => mapDbHadith(resolveHadithRow(item.hadiths)))
             .filter(Boolean) as Hadith[];
@@ -190,14 +220,39 @@ export const db = {
         console.error("Supabase bookmarks catch:", err);
       }
     }
+    
+    // Local fallback with DB cache queries for missing items
     const bookmarks = getLocalBookmarks();
     const cached = getLocalCachedHadiths();
-    return bookmarks.map(id => cached[id]).filter(Boolean);
+    const result: Hadith[] = [];
+    
+    for (const id of bookmarks) {
+      let hadith = cached[id];
+      if (!hadith && supabase) {
+        try {
+          const { data } = await supabase
+            .from('hadiths')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle();
+          if (data) {
+            hadith = mapDbHadith(data);
+            saveLocalCachedHadith(hadith);
+          }
+        } catch (e) {
+          console.warn("Failed to fetch missing hadith details for bookmark:", e);
+        }
+      }
+      if (hadith) {
+        result.push(hadith);
+      }
+    }
+    return result;
   },
 
   // Get Notes alongside their associated Hadith details
   async getNotesWithHadiths(): Promise<{hadith: Hadith, content: string}[]> {
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       try {
         const userId = getOrInitUserId();
         const { data, error } = await supabase
@@ -205,7 +260,8 @@ export const db = {
           .select('content, hadiths(*)')
           .eq('user_id', userId);
         
-        if (!error && data) {
+        checkSchemaError(error);
+        if (!error && data && isSchemaValid) {
           return data
             .map(item => ({
               hadith: mapDbHadith(resolveHadithRow(item.hadiths)),
@@ -218,29 +274,49 @@ export const db = {
         console.error("Supabase notes catch:", err);
       }
     }
+    
+    // Local fallback with DB cache queries for missing items
     const localNotes = getLocalNotes();
     const cached = getLocalCachedHadiths();
-    return Object.entries(localNotes)
-      .map(([idStr, content]) => {
-        const id = parseInt(idStr, 10);
-        return {
-          hadith: cached[id],
-          content
-        };
-      })
-      .filter(item => !!item.hadith);
+    const result: {hadith: Hadith, content: string}[] = [];
+    
+    for (const [idStr, content] of Object.entries(localNotes)) {
+      const id = parseInt(idStr, 10);
+      let hadith = cached[id];
+      if (!hadith && supabase) {
+        try {
+          const { data } = await supabase
+            .from('hadiths')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle();
+          if (data) {
+            hadith = mapDbHadith(data);
+            saveLocalCachedHadith(hadith);
+          }
+        } catch (e) {
+          console.warn("Failed to fetch missing hadith details for note:", e);
+        }
+      }
+      
+      if (hadith) {
+        result.push({ hadith, content });
+      }
+    }
+    return result;
   },
 
   // Bookmarks IDs (for quick check in views)
   async getBookmarks(): Promise<number[]> {
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       const userId = getOrInitUserId();
       const { data, error } = await supabase
         .from('bookmarks')
         .select('hadith_id')
         .eq('user_id', userId);
       
-      if (!error && data) {
+      checkSchemaError(error);
+      if (!error && data && isSchemaValid) {
         return data.map(item => item.hadith_id);
       }
       console.error("Error fetching bookmarks from Supabase, falling back to local:", error);
@@ -260,7 +336,7 @@ export const db = {
       bookmarked = true;
     }
     
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       const userId = getOrInitUserId();
       // Check if bookmarked
       const { data, error } = await supabase
@@ -270,7 +346,8 @@ export const db = {
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (!error) {
+      checkSchemaError(error);
+      if (!error && isSchemaValid) {
         if (data) {
           // Delete bookmark
           const { error: delError } = await supabase
@@ -278,7 +355,8 @@ export const db = {
             .delete()
             .eq('hadith_id', hadith.id)
             .eq('user_id', userId);
-          if (!delError) {
+          checkSchemaError(delError);
+          if (!delError && isSchemaValid) {
             saveLocalBookmarks(local);
             return false;
           }
@@ -287,7 +365,8 @@ export const db = {
           const { error: insError } = await supabase
             .from('bookmarks')
             .insert([{ user_id: userId, hadith_id: hadith.id }]);
-          if (!insError) {
+          checkSchemaError(insError);
+          if (!insError && isSchemaValid) {
             saveLocalBookmarks(local);
             return true;
           }
@@ -302,14 +381,15 @@ export const db = {
 
   // Notes Map (for quick checks)
   async getNotes(): Promise<Record<number, string>> {
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       const userId = getOrInitUserId();
       const { data, error } = await supabase
         .from('notes')
         .select('hadith_id, content')
         .eq('user_id', userId);
       
-      if (!error && data) {
+      checkSchemaError(error);
+      if (!error && data && isSchemaValid) {
         const notesMap: Record<number, string> = {};
         data.forEach(item => {
           notesMap[item.hadith_id] = item.content;
@@ -326,7 +406,7 @@ export const db = {
     const local = getLocalNotes();
     local[hadith.id] = content;
 
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       const userId = getOrInitUserId();
       // Upsert note
       const { data, error: selectError } = await supabase
@@ -336,7 +416,8 @@ export const db = {
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (!selectError) {
+      checkSchemaError(selectError);
+      if (!selectError && isSchemaValid) {
         if (data) {
           // Update
           const { error: updateError } = await supabase
@@ -344,7 +425,8 @@ export const db = {
             .update({ content, updated_at: new Date().toISOString() })
             .eq('hadith_id', hadith.id)
             .eq('user_id', userId);
-          if (!updateError) {
+          checkSchemaError(updateError);
+          if (!updateError && isSchemaValid) {
             saveLocalNotes(local);
             return true;
           }
@@ -353,7 +435,8 @@ export const db = {
           const { error: insertError } = await supabase
             .from('notes')
             .insert([{ user_id: userId, hadith_id: hadith.id, content }]);
-          if (!insertError) {
+          checkSchemaError(insertError);
+          if (!insertError && isSchemaValid) {
             saveLocalNotes(local);
             return true;
           }
@@ -370,14 +453,15 @@ export const db = {
     const local = getLocalNotes();
     delete local[hadithId];
 
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       const userId = getOrInitUserId();
       const { error } = await supabase
         .from('notes')
         .delete()
         .eq('hadith_id', hadithId)
         .eq('user_id', userId);
-      if (!error) {
+      checkSchemaError(error);
+      if (!error && isSchemaValid) {
         saveLocalNotes(local);
         return true;
       }
@@ -390,7 +474,7 @@ export const db = {
   // Reading Progress Hadith details lookup
   async getReadingProgressHadith(): Promise<Hadith | null> {
     let hadithId: number | null = null;
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       try {
         const userId = getOrInitUserId();
         const { data, error } = await supabase
@@ -399,7 +483,8 @@ export const db = {
           .eq('user_id', userId)
           .maybeSingle();
 
-        if (!error && data) {
+        checkSchemaError(error);
+        if (!error && data && isSchemaValid) {
           hadithId = data.hadith_id;
         }
       } catch (err) {
@@ -413,18 +498,19 @@ export const db = {
     }
 
     if (hadithId) {
-      if (supabase) {
+      if (supabase && isSchemaValid) {
         try {
           const { data, error } = await supabase
             .from('hadiths')
             .select('*')
             .eq('id', hadithId)
             .maybeSingle();
-          if (!error && data) {
+          checkSchemaError(error);
+          if (!error && data && isSchemaValid) {
             return mapDbHadith(data);
           }
         } catch (err) {
-          console.error("Error fetching cached hadith for progress:", err);
+          console.error("Error fetching cached hadith for reading progress:", err);
         }
       }
       const cached = getLocalCachedHadiths();
@@ -437,7 +523,7 @@ export const db = {
     await this.ensureHadithExists(hadith);
     localStorage.setItem(LOCAL_PROGRESS_KEY, hadith.id.toString());
 
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       const userId = getOrInitUserId();
       // We can insert/update the progress
       const { data, error: selectError } = await supabase
@@ -446,7 +532,8 @@ export const db = {
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (!selectError) {
+      checkSchemaError(selectError);
+      if (!selectError && isSchemaValid) {
         if (data) {
           // Update
           const { error: updateError } = await supabase
@@ -454,13 +541,15 @@ export const db = {
             .update({ hadith_id: hadith.id, updated_at: new Date().toISOString() })
             .eq('id', data.id)
             .eq('user_id', userId);
-          return !updateError;
+          checkSchemaError(updateError);
+          return !updateError && isSchemaValid;
         } else {
           // Insert
           const { error: insertError } = await supabase
             .from('reading_progress')
             .insert([{ user_id: userId, hadith_id: hadith.id }]);
-          return !insertError;
+          checkSchemaError(insertError);
+          return !insertError && isSchemaValid;
         }
       }
       console.error("Error saving reading progress to Supabase, falling back to local:", selectError);
@@ -471,7 +560,7 @@ export const db = {
 
   // User Progress: Streaks, Goals, and Settings
   async getUserProgress(): Promise<UserProgressData | null> {
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       try {
         const userId = getOrInitUserId();
         const { data, error } = await supabase
@@ -480,7 +569,8 @@ export const db = {
           .eq('user_id', userId)
           .maybeSingle();
         
-        if (!error && data) {
+        checkSchemaError(error);
+        if (!error && data && isSchemaValid) {
           return {
             streak_count: data.streak_count,
             last_read_date: data.last_read_date,
@@ -501,7 +591,7 @@ export const db = {
   },
 
   async syncUserProgress(progress: Partial<UserProgressData>): Promise<boolean> {
-    if (supabase) {
+    if (supabase && isSchemaValid) {
       try {
         const userId = getOrInitUserId();
         // Check if user progress row exists
@@ -511,7 +601,8 @@ export const db = {
           .eq('user_id', userId)
           .maybeSingle();
         
-        if (!selectError) {
+        checkSchemaError(selectError);
+        if (!selectError && isSchemaValid) {
           if (data) {
             // Update
             const { error: updateError } = await supabase
@@ -521,7 +612,8 @@ export const db = {
                 updated_at: new Date().toISOString()
               })
               .eq('user_id', userId);
-            return !updateError;
+            checkSchemaError(updateError);
+            return !updateError && isSchemaValid;
           } else {
             // Insert
             const { error: insertError } = await supabase
@@ -535,7 +627,8 @@ export const db = {
                 read_history: progress.read_history || {},
                 settings: progress.settings || {}
               }]);
-            return !insertError;
+            checkSchemaError(insertError);
+            return !insertError && isSchemaValid;
           }
         }
         console.error("Error checking user progress existence:", selectError);
@@ -546,6 +639,59 @@ export const db = {
     return false;
   },
 
+  // Perform a one-time migration of bookmarks and notes from LocalStorage to Supabase
+  async migrateLocalDataToCloud(): Promise<void> {
+    if (!supabase || !isSchemaValid) return;
+    try {
+      const userId = getOrInitUserId();
+
+      // 1. Migrate Bookmarks
+      const cloudBookmarks = await this.getBookmarks();
+      const localBookmarks = getLocalBookmarks();
+      if (cloudBookmarks.length === 0 && localBookmarks.length > 0 && isSchemaValid) {
+        console.info("Migrating local bookmarks to Supabase...");
+        const cached = getLocalCachedHadiths();
+        const insertRows = [];
+        for (const bid of localBookmarks) {
+          const hadith = cached[bid];
+          if (hadith) {
+            await this.ensureHadithExists(hadith);
+            insertRows.push({ user_id: userId, hadith_id: bid });
+          }
+        }
+        if (insertRows.length > 0 && isSchemaValid) {
+          const { error } = await supabase.from('bookmarks').insert(insertRows);
+          checkSchemaError(error);
+          if (error) console.error("Error migrating bookmarks:", error);
+        }
+      }
+
+      // 2. Migrate Notes
+      const cloudNotes = await this.getNotes();
+      const localNotes = getLocalNotes();
+      if (Object.keys(cloudNotes).length === 0 && Object.keys(localNotes).length > 0 && isSchemaValid) {
+        console.info("Migrating local notes to Supabase...");
+        const cached = getLocalCachedHadiths();
+        const insertRows = [];
+        for (const [nidStr, content] of Object.entries(localNotes)) {
+          const nid = parseInt(nidStr, 10);
+          const hadith = cached[nid];
+          if (hadith) {
+            await this.ensureHadithExists(hadith);
+            insertRows.push({ user_id: userId, hadith_id: nid, content });
+          }
+        }
+        if (insertRows.length > 0 && isSchemaValid) {
+          const { error } = await supabase.from('notes').insert(insertRows);
+          checkSchemaError(error);
+          if (error) console.error("Error migrating notes:", error);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to migrate local data to cloud:", err);
+    }
+  },
+
   async restoreBackup(backupUserId: string): Promise<{
     success: boolean;
     progress?: UserProgressData;
@@ -553,7 +699,7 @@ export const db = {
     notes?: Record<number, string>;
     readingProgress?: Hadith | null;
   }> {
-    if (!supabase) {
+    if (!supabase || !isSchemaValid) {
       return { success: false };
     }
     try {
@@ -570,7 +716,8 @@ export const db = {
         .eq('user_id', backupUserId)
         .maybeSingle();
 
-      if (progressErr || !progressRow) {
+      checkSchemaError(progressErr);
+      if (progressErr || !progressRow || !isSchemaValid) {
         // Check if bookmarks or notes exist for this user before giving up
         const { data: bCheck } = await supabase
           .from('bookmarks')

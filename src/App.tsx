@@ -835,6 +835,10 @@ const App: React.FC = () => {
             });
           }
         }
+
+        if (isSupabaseConfigured) {
+          await db.migrateLocalDataToCloud();
+        }
         
         // 2. Fetch bookmarks from database
         const bms = await db.getBookmarks();
