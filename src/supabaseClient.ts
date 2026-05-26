@@ -20,7 +20,7 @@ export interface DbHadith {
 
 
 const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
-const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
 
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 
@@ -31,7 +31,7 @@ export const supabase = isSupabaseConfigured
 if (isSupabaseConfigured) {
   console.info(`%c✅ Supabase connected → ${supabaseUrl}`, 'color: #2E9F85; font-weight: bold');
 } else {
-  console.warn('⚠️ Supabase credentials missing (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY). Operating in offline/LocalStorage mode.');
+  console.warn('⚠️ Supabase credentials missing (VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY). Operating in offline/LocalStorage mode.');
 }
 
 // Local Storage Fallback Helpers
