@@ -100,6 +100,9 @@ const translations = {
     themeIndigo: "Royal Indigo",
     themeEmerald: "Emerald Sanctuary",
     themeClay: "Clay Tablet",
+    themeObsidian: "Obsidian Slate",
+    themeSand: "Desert Sand",
+    themeNavy: "Midnight Navy",
     arabicTypography: "Arabic Font Size",
     arabicTypographyDesc: "Scale size of the sacred Arabic script.",
     translationTypography: "Translation Font Size",
@@ -241,6 +244,9 @@ const translations = {
     themeIndigo: "الأزرق الملكي",
     themeEmerald: "الملاذ الزمردي",
     themeClay: "اللوح الصلصالي",
+    themeObsidian: "حجر الأوبسيديان",
+    themeSand: "رمل الصحراء",
+    themeNavy: "البحر الليلي",
     arabicTypography: "حجم الخط العربي",
     arabicTypographyDesc: "تغيير حجم الخط للنصوص العربية الشريفة.",
     translationTypography: "حجم خط الترجمة",
@@ -1798,7 +1804,10 @@ const App: React.FC = () => {
                             { id: 'sepia', color: '#EFEBDE', name: t.themeSepia },
                             { id: 'indigo', color: '#0A0D1A', name: t.themeIndigo },
                             { id: 'emerald', color: '#04140D', name: t.themeEmerald },
-                            { id: 'clay', color: '#B87B52', name: t.themeClay }
+                            { id: 'clay', color: '#B87B52', name: t.themeClay },
+                            { id: 'obsidian', color: '#0A0A0C', name: t.themeObsidian },
+                            { id: 'sand', color: '#F7F2E8', name: t.themeSand },
+                            { id: 'navy', color: '#050B14', name: t.themeNavy }
                           ].map((item) => (
                             <div
                               key={item.id}
@@ -3668,6 +3677,24 @@ const App: React.FC = () => {
                         style={{ background: '#B87B52', color: '#381E10', border: theme === 'clay' ? '2px solid var(--accent-emerald)' : '1px solid var(--glass-border)', padding: '0.4rem 0.8rem', borderRadius: '10px', fontSize: '0.8rem', cursor: 'pointer' }}
                       >
                         {t.themeClay}
+                      </button>
+                      <button 
+                        onClick={() => setTheme('obsidian')}
+                        style={{ background: '#0A0A0C', color: '#F3F4F6', border: theme === 'obsidian' ? '2px solid var(--accent-gold)' : '1px solid var(--glass-border)', padding: '0.4rem 0.8rem', borderRadius: '10px', fontSize: '0.8rem', cursor: 'pointer' }}
+                      >
+                        {t.themeObsidian}
+                      </button>
+                      <button 
+                        onClick={() => setTheme('sand')}
+                        style={{ background: '#F7F2E8', color: '#2C251E', border: theme === 'sand' ? '2px solid var(--accent-emerald)' : '1px solid var(--glass-border)', padding: '0.4rem 0.8rem', borderRadius: '10px', fontSize: '0.8rem', cursor: 'pointer' }}
+                      >
+                        {t.themeSand}
+                      </button>
+                      <button 
+                        onClick={() => setTheme('navy')}
+                        style={{ background: '#050B14', color: '#E2E8F0', border: theme === 'navy' ? '2px solid var(--accent-emerald)' : '1px solid var(--glass-border)', padding: '0.4rem 0.8rem', borderRadius: '10px', fontSize: '0.8rem', cursor: 'pointer' }}
+                      >
+                        {t.themeNavy}
                       </button>
                     </div>
                   </div>

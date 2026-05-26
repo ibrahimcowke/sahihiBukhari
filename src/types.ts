@@ -15,7 +15,7 @@ export interface Hadith {
   chapterId?: number;
 }
 
-export type Theme = 'night' | 'paper' | 'sepia' | 'indigo' | 'emerald' | 'clay';
+export type Theme = 'night' | 'paper' | 'sepia' | 'indigo' | 'emerald' | 'clay' | 'obsidian' | 'sand' | 'navy';
 export type ArabicFont = 'Amiri' | 'Scheherazade New' | 'Lateef' | 'Cairo' | 'Tajawal';
 export type DisplayMode = 'bilingual' | 'arabic-only' | 'translation-only';
 export type TextAlignment = 'center' | 'right' | 'justify';
