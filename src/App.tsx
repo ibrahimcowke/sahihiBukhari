@@ -347,6 +347,7 @@ const App: React.FC = () => {
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
   const [chapterHadiths, setChapterHadiths] = useState<Hadith[]>([]);
   const [loadingHadiths, setLoadingHadiths] = useState(false);
+  const [visibleHadithCount, setVisibleHadithCount] = useState(15);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -1626,6 +1627,7 @@ const App: React.FC = () => {
     setActiveChapter(ch);
     setShowToolbar(true);
     setChapterHadiths([]);
+    setVisibleHadithCount(15);
     setLoadingHadiths(true);
     setCurrentTab('chapters');
 
@@ -1641,6 +1643,9 @@ const App: React.FC = () => {
         if (foundIndex !== -1) {
           targetIndex = foundIndex;
         }
+      }
+      if (targetIndex >= 15) {
+        setVisibleHadithCount(targetIndex + 5);
       }
       setSlideDirection(direction ?? 1);
       setCurrentHadithIndex(targetIndex);
@@ -2834,7 +2839,7 @@ const App: React.FC = () => {
                       <div>
                         {readingLayout === 'scroll' ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-                            {chapterHadiths.map((hadith) => {
+                            {chapterHadiths.slice(0, visibleHadithCount).map((hadith) => {
                               const isBookmarked = bookmarkedIds.includes(hadith.id);
                               const hasNote = !!notes[hadith.id];
                               return (
@@ -2984,6 +2989,29 @@ const App: React.FC = () => {
                                 </div>
                               );
                             })}
+                            {visibleHadithCount < chapterHadiths.length && (
+                              <button
+                                type="button"
+                                onClick={() => setVisibleHadithCount(prev => prev + 15)}
+                                className="primary-btn"
+                                style={{
+                                  margin: '2rem auto',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.5rem',
+                                  padding: '0.6rem 1.8rem',
+                                  borderRadius: '12px',
+                                  fontSize: '0.88rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <span>{language === 'arabic' ? 'عرض المزيد من الأحاديث' : 'Load More Hadiths'}</span>
+                                <span style={{ opacity: 0.75, fontSize: '0.78rem' }}>
+                                  ({visibleHadithCount} / {chapterHadiths.length})
+                                </span>
+                              </button>
+                            )}
                           </div>
                         ) : (
                           /* Page-by-page view layout */

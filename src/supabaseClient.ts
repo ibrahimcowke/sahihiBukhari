@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Hadith } from './types';
+import { invalidateSearchPool } from './api';
 
 export interface DbHadith {
   id: number;
@@ -67,6 +68,7 @@ const saveLocalCachedHadith = (hadith: Hadith) => {
     const cached = getLocalCachedHadiths();
     cached[hadith.id] = hadith;
     localStorage.setItem(LOCAL_CACHED_HADITHS_KEY, JSON.stringify(cached));
+    invalidateSearchPool();
   } catch (e) {
     console.error("Failed to save local cached hadith:", e);
   }

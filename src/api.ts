@@ -3,6 +3,13 @@ import { bukhariData } from './data';
 
 const API_KEY = '$2y$10$hfYJl0B1y725HXIcRj21DX4g4ytbGREpRFcjqX3ltCFKQWXsP3sS';
 
+// Memory cache for local search pool to prevent parsing localStorage on every search key stroke
+let cachedSearchPool: Hadith[] | null = null;
+
+export function invalidateSearchPool() {
+  cachedSearchPool = null;
+}
+
 // Helper to normalize Arabic text (remove Tashkeel/diacritics, normalize letters)
 function normalizeArabic(text: string): string {
   if (!text) return '';
@@ -23,6 +30,10 @@ function normalizeArabic(text: string): string {
 
 // Local search pool including static data and localStorage caches
 function getLocalSearchPool(): Hadith[] {
+  if (cachedSearchPool) {
+    return cachedSearchPool;
+  }
+
   const pool: Hadith[] = [...bukhariData];
   const seenIds = new Set<number>(pool.map(h => h.id));
 
@@ -63,6 +74,7 @@ function getLocalSearchPool(): Hadith[] {
     }
   }
 
+  cachedSearchPool = pool;
   return pool;
 }
 
@@ -101,11 +113,17 @@ function getLevenshteinDistance(s1: string, s2: string): number {
 function isFuzzyWordMatch(word1: string, word2: string): boolean {
   if (word1 === word2) return true;
   
-  // Calculate threshold: 30% of the longer word length, max 2 edits
   const maxLen = Math.max(word1.length, word2.length);
   if (maxLen <= 2) return word1 === word2;
   
   const threshold = maxLen <= 4 ? 1 : 2;
+  
+  // Performance early exit: if the length difference is greater than the allowed edits (threshold),
+  // they cannot be a fuzzy match, saving us from calculating Levenshtein distance.
+  if (Math.abs(word1.length - word2.length) > threshold) {
+    return false;
+  }
+  
   return getLevenshteinDistance(word1, word2) <= threshold;
 }
 
@@ -158,6 +176,7 @@ export function searchLocalPool(query: string): Hadith[] {
     // 2. Token-level matching (exact and close/fuzzy matches)
     if (queryTokens.length > 0) {
       let matchedTokensCount = 0;
+      let targetWords: string[] | null = null;
       
       for (const qToken of queryTokens) {
         let tokenMatched = false;
@@ -175,8 +194,10 @@ export function searchLocalPool(query: string): Hadith[] {
             score += 30;
             tokenMatched = true;
           } else {
-            // Fuzzy word match on English translation words
-            const targetWords = normTranslation.split(/[^a-zA-Z0-9]+/).filter(w => w.length > 1);
+            // Fuzzy word match on English translation words (lazy tokenize and cache)
+            if (!targetWords) {
+              targetWords = normTranslation.split(/[^a-zA-Z0-9]+/).filter(w => w.length > 1);
+            }
             for (const tWord of targetWords) {
               if (isFuzzyWordMatch(qToken, tWord)) {
                 score += 15; // Typo match
@@ -308,6 +329,7 @@ export const api = {
         const mapped = data.hadiths.data.map((h: ApiHadith) => this.mapApiHadith(h, activeChapter));
         try {
           localStorage.setItem(localKey, JSON.stringify(mapped));
+          invalidateSearchPool(); // Invalidate memory cache so search includes newly downloaded hadiths
         } catch (storageErr) {
           console.warn("Failed to save hadiths to localStorage (quota exceeded)", storageErr);
         }
