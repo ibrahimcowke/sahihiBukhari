@@ -31,7 +31,10 @@ import {
   Plus,
   Minus,
   RotateCw,
-  Palette
+  Palette,
+  Award,
+  Lock,
+  Activity
 } from 'lucide-react';
 import { db, isSupabaseConfigured } from './supabaseClient';
 import { ruwaatsData } from './ruwaats';
@@ -359,6 +362,28 @@ const App: React.FC = () => {
   const [playingHadithId, setPlayingHadithId] = useState<number | null>(null);
   const [committedSearchQuery, setCommittedSearchQuery] = useState('');
 
+  // Dashboard enhancements states
+  const [activeShareHadith, setActiveShareHadith] = useState<Hadith | null>(null);
+  const [shareBgPattern, setShareBgPattern] = useState<'night' | 'emerald' | 'indigo' | 'clay' | 'parchment'>('emerald');
+  const [isPlayingDailyHadith, setIsPlayingDailyHadith] = useState(false);
+  const [isAnalyticsExpanded, setIsAnalyticsExpanded] = useState<boolean>(() => {
+    return localStorage.getItem('bukhari_analytics_expanded') !== 'false';
+  });
+  const [activeReadingPlan, setActiveReadingPlan] = useState<string>(() => {
+    return localStorage.getItem('bukhari_active_reading_plan') || 'none';
+  });
+
+  // Handle SpeechSynthesis audio player cleanup
+  useEffect(() => {
+    // If user navigates away from Home tab, or if dailyHadith changes, stop narration
+    if (currentTab !== 'home' || !dailyHadith) {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        setIsPlayingDailyHadith(false);
+      }
+    }
+  }, [currentTab, dailyHadith]);
+
   // Premium PWA States (Reading progress tracking and Offline Chapter Downloader)
   const [readHadithIds, setReadHadithIds] = useState<Set<number>>(() => {
     try {
@@ -441,6 +466,100 @@ const App: React.FC = () => {
     });
     return map;
   }, [cachedChapterIds, readHadithIds]);
+
+  // Achievements & Badges List
+  const badgesList = useMemo(() => {
+    return [
+      {
+        id: 'beginner',
+        nameEn: 'Al-Mubtadi\'',
+        nameAr: 'المبتدئ',
+        descEn: 'Read your first Hadith.',
+        descAr: 'قراءة أول حديث لك.',
+        unlocked: readHadithIds.size >= 1,
+        icon: '🌟'
+      },
+      {
+        id: 'seeker',
+        nameEn: 'Talib al-\'Ilm',
+        nameAr: 'طالب العلم',
+        descEn: 'Read 10+ Hadiths.',
+        descAr: 'قراءة 10 أحاديث أو أكثر.',
+        unlocked: readHadithIds.size >= 10,
+        icon: '📚'
+      },
+      {
+        id: 'chronicler',
+        nameEn: 'Al-Muwaththiq',
+        nameAr: 'الموثق',
+        descEn: 'Write 3+ notes.',
+        descAr: 'كتابة 3 تأملات أو أكثر.',
+        unlocked: notesWithHadiths.length >= 3,
+        icon: '📝'
+      },
+      {
+        id: 'preserver',
+        nameEn: 'Al-Muhafiz',
+        nameAr: 'المحافظ',
+        descEn: 'Bookmark 5+ Hadiths.',
+        descAr: 'حفظ 5 أحاديث في المفضلة.',
+        unlocked: bookmarkedIds.length >= 5,
+        icon: '🔖'
+      },
+      {
+        id: 'consistent',
+        nameEn: 'Al-Muthabit',
+        nameAr: 'المثابر',
+        descEn: 'Reach a 3-day streak.',
+        descAr: 'تحقيق سلسلة قراءة لـ 3 أيام.',
+        unlocked: streakCount >= 3,
+        icon: '🔥'
+      },
+      {
+        id: 'diligent',
+        nameEn: 'Al-Mujtahid',
+        nameAr: 'المجتهد',
+        descEn: 'Read 50+ Hadiths.',
+        descAr: 'قراءة 50 حديثاً أو أكثر.',
+        unlocked: readHadithIds.size >= 50,
+        icon: '🕌'
+      }
+    ];
+  }, [readHadithIds.size, notesWithHadiths.length, bookmarkedIds.length, streakCount]);
+
+  // 7-Day Reading Activity Chart Data
+  const activityChartData = useMemo(() => {
+    const data: { dayNameEn: string; dayNameAr: string; count: number; dateStr: string }[] = [];
+    const dayNamesEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayNamesAr = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    
+    // Get today and the past 6 days
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
+      const count = Object.values(readHistory).filter(date => date === dateStr).length;
+      const dayIndex = d.getDay();
+      
+      data.push({
+        dayNameEn: dayNamesEn[dayIndex],
+        dayNameAr: dayNamesAr[dayIndex],
+        count,
+        dateStr
+      });
+    }
+    return data;
+  }, [readHistory]);
+
+  const overallProgressPercent = useMemo(() => {
+    const bukhariTotal = 7276;
+    return parseFloat(((readHadithIds.size / bukhariTotal) * 100).toFixed(2));
+  }, [readHadithIds.size]);
 
   // Settings state
   const [arabicFontSize, setArabicFontSize] = useState<number>(() => {
@@ -1411,6 +1530,45 @@ const App: React.FC = () => {
     }
   };
 
+  // Handle Daily Hadith Text-to-Speech Narration
+  const handlePlayTTS = () => {
+    if (!dailyHadith) return;
+    
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      triggerToast(language === 'arabic' ? 'المتصفح لا يدعم القراءة الصوتية' : 'Audio narration is not supported by your browser.');
+      return;
+    }
+
+    if (isPlayingDailyHadith) {
+      window.speechSynthesis.cancel();
+      setIsPlayingDailyHadith(false);
+      return;
+    }
+
+    // Stop any current speaking
+    window.speechSynthesis.cancel();
+
+    // Format narration text nicely for English reader
+    const narratorPart = dailyHadith.englishNarrator ? `${dailyHadith.englishNarrator} narrated: ` : '';
+    const cleanTranslation = dailyHadith.translation.replace(/[ﷺ(pbuh)]/g, '').trim();
+    const textToSpeak = `Hadith number ${dailyHadith.number} from Book of ${dailyHadith.kitab}. ${narratorPart} ${cleanTranslation}`;
+    
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.lang = 'en-US';
+    
+    utterance.onend = () => {
+      setIsPlayingDailyHadith(false);
+    };
+
+    utterance.onerror = (e) => {
+      console.warn("TTS utterance error:", e);
+      setIsPlayingDailyHadith(false);
+    };
+
+    setIsPlayingDailyHadith(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
   const handleCopyArabic = (hadith: Hadith) => {
     navigator.clipboard.writeText(hadith.arabic);
     triggerToast(language === 'arabic' ? 'تم نسخ النص العربي فقط' : 'Arabic text copied to clipboard');
@@ -1419,6 +1577,18 @@ const App: React.FC = () => {
   const handleCopyEnglish = (hadith: Hadith) => {
     navigator.clipboard.writeText(hadith.translation);
     triggerToast(language === 'arabic' ? 'تم نسخ الترجمة الإنجليزية فقط' : 'English translation copied to clipboard');
+  };
+
+  const handleCopyFormattedShare = (hadith: Hadith) => {
+    const text = `✨ Sahih al-Bukhari Reflection ✨\n` +
+      `Hadith Number: ${hadith.number}\n` +
+      `📖 Book: ${hadith.kitab}\n` +
+      `🌿 Chapter: ${hadith.bab}\n\n` +
+      `Arabic:\n${hadith.arabic}\n\n` +
+      `Translation:\n"${hadith.translation}"\n\n` +
+      `— Shared via Sahih al-Bukhari App`;
+    navigator.clipboard.writeText(text);
+    triggerToast(language === 'arabic' ? 'تم نسخ النص المنسق بالكامل للمشاركة!' : 'Formatted text copied to clipboard!');
   };
 
   // Select chapter and load hadiths
@@ -1736,6 +1906,210 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Reading Analytics & Achievements Section */}
+                <div className="glass-card analytics-journey-card" style={{ padding: '1.75rem', marginBottom: '3rem' }}>
+                  <button 
+                    type="button"
+                    className="analytics-header-toggle"
+                    onClick={() => {
+                      const nextVal = !isAnalyticsExpanded;
+                      setIsAnalyticsExpanded(nextVal);
+                      localStorage.setItem('bukhari_analytics_expanded', String(nextVal));
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                      <Activity size={20} style={{ color: 'var(--accent-emerald)' }} />
+                      <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>
+                        {language === 'arabic' ? 'مسيرة القراءة والإنجازات' : 'Reading Analytics & Journey'}
+                      </h3>
+                    </div>
+                    <div className="analytics-toggle-btn" style={{ transform: isAnalyticsExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                      <ChevronDown size={20} />
+                    </div>
+                  </button>
+
+                  <AnimatePresence>
+                    {isAnalyticsExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                        animate={{ height: 'auto', opacity: 1, marginTop: '1.5rem' }}
+                        exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                        transition={{ duration: 0.3 }}
+                        style={{ overflow: 'hidden' }}
+                      >
+                        <div className="analytics-grid">
+                          {/* Left Panel: Overall Progress Circle & Plan Selector */}
+                          <div className="progress-circle-container">
+                            <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                              {language === 'arabic' ? 'الإنجاز الكلي للكتب' : 'Overall Completion'}
+                            </h4>
+                            
+                            {/* Circular progress SVG */}
+                            <div style={{ position: 'relative', width: '130px', height: '130px', margin: '0.5rem 0' }}>
+                              <svg width="130" height="130" viewBox="0 0 130 130">
+                                {/* Background circle */}
+                                <circle 
+                                  cx="65" 
+                                  cy="65" 
+                                  r="54" 
+                                  fill="transparent" 
+                                  stroke="var(--glass-border)" 
+                                  strokeWidth="10" 
+                                />
+                                {/* Progress circle */}
+                                <circle 
+                                  cx="65" 
+                                  cy="65" 
+                                  r="54" 
+                                  fill="transparent" 
+                                  stroke="url(#progressGradient)" 
+                                  strokeWidth="10" 
+                                  strokeDasharray={`${2 * Math.PI * 54}`}
+                                  strokeDashoffset={`${2 * Math.PI * 54 * (1 - overallProgressPercent / 100)}`}
+                                  strokeLinecap="round"
+                                  className="progress-ring-circle"
+                                />
+                                <defs>
+                                  <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stopColor="var(--accent-emerald)" />
+                                    <stop offset="100%" stopColor="var(--accent-gold)" />
+                                  </linearGradient>
+                                </defs>
+                              </svg>
+                              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.1 }}>
+                                <span style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                  {formatNumber(overallProgressPercent)}%
+                                </span>
+                                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                                  {formatNumber(readHadithIds.size)} / {formatNumber(7276)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Reading Plan Selector */}
+                            <div style={{ width: '100%', marginTop: '0.5rem' }}>
+                              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+                                {language === 'arabic' ? 'خطة القراءة النشطة:' : 'Active Reading Plan:'}
+                              </label>
+                              <select
+                                value={activeReadingPlan}
+                                onChange={(e) => {
+                                  const plan = e.target.value;
+                                  setActiveReadingPlan(plan);
+                                  localStorage.setItem('bukhari_active_reading_plan', plan);
+                                  // Update daily reading target goal based on plan
+                                  let nextGoal = dailyGoal;
+                                  if (plan === 'light') nextGoal = 3;
+                                  else if (plan === 'medium') nextGoal = 10;
+                                  else if (plan === 'heavy') nextGoal = 20;
+                                  
+                                  if (plan !== 'none') {
+                                    setDailyGoal(nextGoal);
+                                    localStorage.setItem('bukhari_daily_goal', String(nextGoal));
+                                  }
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.5rem',
+                                  background: 'var(--input-bg)',
+                                  border: '1px solid var(--glass-border)',
+                                  borderRadius: '8px',
+                                  color: 'var(--text-primary)',
+                                  fontSize: '0.8rem',
+                                  outline: 'none',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <option value="none">{language === 'arabic' ? 'لا توجد خطة نشطة' : 'No Reading Plan'}</option>
+                                <option value="light">{language === 'arabic' ? 'خطة ميسرة (3 أحاديث/يوم)' : 'Light Plan (3/day)'}</option>
+                                <option value="medium">{language === 'arabic' ? 'خطة متوسطة (10 أحاديث/يوم)' : 'Medium Plan (10/day)'}</option>
+                                <option value="heavy">{language === 'arabic' ? 'خطة مكثفة (20 حديثاً/يوم)' : 'Heavy Plan (20/day)'}</option>
+                              </select>
+                              
+                              {activeReadingPlan !== 'none' && (
+                                <p style={{ fontSize: '0.7rem', color: 'var(--accent-gold)', marginTop: '0.4rem', marginBottom: 0 }}>
+                                  {activeReadingPlan === 'light' && (language === 'arabic' ? 'تختم صحيح البخاري خلال 6.6 سنوات' : 'Finish Bukhari in ~6.6 years')}
+                                  {activeReadingPlan === 'medium' && (language === 'arabic' ? 'تختم صحيح البخاري خلال سنتين' : 'Finish Bukhari in ~2 years')}
+                                  {activeReadingPlan === 'heavy' && (language === 'arabic' ? 'تختم صحيح البخاري خلال عام واحد' : 'Finish Bukhari in ~1 year')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Right Panel: Weekly Activity Bar Chart */}
+                          <div className="activity-chart-container">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                              <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                {language === 'arabic' ? 'نشاط القراءة الأسبوعي' : 'Weekly Reading Activity'}
+                              </h4>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                                {language === 'arabic' ? 'آخر 7 أيام' : 'Last 7 Days'}
+                              </span>
+                            </div>
+
+                            <div className="activity-chart-bars">
+                              {activityChartData.map((dayData, idx) => {
+                                // Find maximum count to scale the bars (with minimum 1 to avoid divide by zero)
+                                const maxCount = Math.max(...activityChartData.map(d => d.count), 1);
+                                const heightPercent = Math.max(4, (dayData.count / maxCount) * 100);
+                                
+                                return (
+                                  <div key={idx} className="activity-bar-wrapper">
+                                    <div className="activity-bar-tooltip">
+                                      {formatNumber(dayData.count)} {language === 'arabic' ? 'أحاديث قُرئت' : 'hadiths read'}
+                                    </div>
+                                    <div 
+                                      className="activity-bar" 
+                                      style={{ height: `${heightPercent}%` }}
+                                    />
+                                    <span className="activity-bar-label">
+                                      {language === 'arabic' ? dayData.dayNameAr : dayData.dayNameEn}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Achievements / Badges Section */}
+                        <div className="badge-achievements-section">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.8rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                            <Award size={16} style={{ color: 'var(--accent-gold)' }} />
+                            <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {language === 'arabic' ? 'الأوسمة والإنجازات الروحية' : 'Spiritual Achievements & Badges'}
+                            </h4>
+                          </div>
+                          
+                          <div className="badge-grid">
+                            {badgesList.map((badge) => (
+                              <div 
+                                key={badge.id} 
+                                className={`badge-card ${badge.unlocked ? 'unlocked' : 'locked'}`}
+                                title={language === 'arabic' ? badge.descAr : badge.descEn}
+                              >
+                                <div className="badge-circle">
+                                  {badge.unlocked ? (
+                                    <span style={{ fontSize: '1.25rem' }}>{badge.icon}</span>
+                                  ) : (
+                                    <Lock size={15} style={{ color: 'var(--text-secondary)', opacity: 0.6 }} />
+                                  )}
+                                </div>
+                                <span className="badge-name">
+                                  {language === 'arabic' ? badge.nameAr : badge.nameEn}
+                                </span>
+                                <span className="badge-desc">
+                                  {language === 'arabic' ? badge.descAr : badge.descEn}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 {/* Continue reading panel */}
                 {lastReadHadith && (
                   <div className="glass-card" style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--glass-border)' }}>
@@ -1856,14 +2230,35 @@ const App: React.FC = () => {
                       <Sparkles size={14} />
                       {t.curatedReflection}
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleShuffleDailyHadith}
-                      className="shuffle-icon-btn"
-                      title={t.shuffleHadith}
-                    >
-                      <RotateCw size={14} />
-                    </button>
+                    <div className="tts-controls-wrapper" style={{ flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                      {/* TTS Wave animation */}
+                      {isPlayingDailyHadith && (
+                        <div className="tts-wave-container">
+                          <div className="tts-bar animating" />
+                          <div className="tts-bar animating" />
+                          <div className="tts-bar animating" />
+                          <div className="tts-bar animating" />
+                        </div>
+                      )}
+                      
+                      <button
+                        type="button"
+                        onClick={handlePlayTTS}
+                        className={`tts-icon-btn ${isPlayingDailyHadith ? 'playing' : ''}`}
+                        title={isPlayingDailyHadith ? (language === 'arabic' ? 'إيقاف الاستماع' : 'Stop Narration') : (language === 'arabic' ? 'استماع للترجمة' : 'Listen to Translation')}
+                      >
+                        {isPlayingDailyHadith ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleShuffleDailyHadith}
+                        className="shuffle-icon-btn"
+                        title={t.shuffleHadith}
+                      >
+                        <RotateCw size={14} />
+                      </button>
+                    </div>
                   </div>
                   {dailyHadith ? (
                     <div>
@@ -1883,13 +2278,41 @@ const App: React.FC = () => {
                           <span>•</span>
                           <span>{t.hadithShort} {formatNumber(dailyHadith.number)}</span>
                         </span>
-                        <button 
-                          className="primary-btn" 
-                          onClick={() => handleSelectChapter(dailyHadith.chapterId || 1, dailyHadith.id)}
-                          style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                        >
-                          {t.readInContext}
-                        </button>
+                        
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            className="glass-card"
+                            onClick={() => {
+                              setActiveShareHadith(dailyHadith);
+                            }}
+                            style={{ 
+                              padding: '0.5rem 1rem', 
+                              fontSize: '0.85rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                              border: '1px solid var(--glass-border)',
+                              background: 'transparent',
+                              color: 'var(--text-primary)',
+                              cursor: 'pointer',
+                              borderRadius: '12px'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-emerald)'}
+                            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+                          >
+                            <Share2 size={14} />
+                            <span>{language === 'arabic' ? 'مشاركة كبطاقة' : 'Share Card'}</span>
+                          </button>
+                          
+                          <button 
+                            className="primary-btn" 
+                            onClick={() => handleSelectChapter(dailyHadith.chapterId || 1, dailyHadith.id)}
+                            style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                          >
+                            {t.readInContext}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1898,6 +2321,64 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Narrator Spotlight Widget */}
+                {(() => {
+                  const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+                  const spotlightNarrator = ruwaatsData[dayOfYear % ruwaatsData.length];
+                  if (!spotlightNarrator) return null;
+
+                  return (
+                    <div className="glass-card narrator-spotlight-card" style={{ padding: '1.75rem', marginBottom: '3rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-emerald)', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                          <Users size={14} />
+                          {language === 'arabic' ? 'راوي اليوم المتميز' : 'Daily Narrator Spotlight'}
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', fontWeight: 500, fontFamily: language === 'arabic' ? 'var(--font-arabic)' : 'inherit' }}>
+                          {language === 'arabic' ? `${formatNumber(spotlightNarrator.totalNarrations)} رواية` : `${formatNumber(spotlightNarrator.totalNarrations)} Narrations`}
+                        </span>
+                      </div>
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                        <div style={{ flex: 1, minWidth: '280px', textAlign: language === 'arabic' ? 'right' : 'left' }}>
+                          <h3 style={{ margin: 0, fontSize: '1.3rem', color: 'var(--text-primary)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: language === 'arabic' ? 'flex-end' : 'flex-start' }}>
+                            <span>{language === 'arabic' ? spotlightNarrator.arabicName : spotlightNarrator.name}</span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 400 }}>
+                              ({language === 'arabic' ? spotlightNarrator.titleArabic : spotlightNarrator.title})
+                            </span>
+                          </h3>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6, marginTop: '0.75rem', marginBottom: '1.2rem' }}>
+                            {language === 'arabic' ? spotlightNarrator.bioArabic : spotlightNarrator.bio}
+                          </p>
+                        </div>
+                        
+                        <div style={{ alignSelf: 'flex-end', marginLeft: language === 'arabic' ? '0' : 'auto', marginRight: language === 'arabic' ? 'auto' : '0' }}>
+                          <button
+                            type="button"
+                            className="primary-btn"
+                            onClick={() => {
+                              // Search for narrator's hadiths
+                              const query = spotlightNarrator.name;
+                              setSearchQuery(query);
+                              handleSearch(undefined, query);
+                            }}
+                            style={{ 
+                              padding: '0.5rem 1rem', 
+                              fontSize: '0.82rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.4rem'
+                            }}
+                          >
+                            <Search size={14} />
+                            <span>{language === 'arabic' ? 'استكشاف الأحاديث' : 'Explore Hadiths'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Dashboard Footer */}
                 <footer className="dashboard-footer" style={{
@@ -3811,6 +4292,150 @@ const App: React.FC = () => {
           >
             <Check size={16} />
             {toastMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Share Card Modal Overlay */}
+      <AnimatePresence>
+        {activeShareHadith && (
+          <motion.div 
+            className="overlay-content"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ zIndex: 350 }}
+          >
+            <motion.div 
+              className="modal-card"
+              initial={{ y: 50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 50, opacity: 0 }}
+              style={{ maxWidth: '580px' }}
+            >
+              <div className="modal-header">
+                <h3 style={{ fontWeight: 500, fontSize: '1.25rem', color: 'var(--accent-gold)' }}>
+                  {language === 'arabic' ? 'إنشاء بطاقة المشاركة' : 'Generate Share Card'}
+                </h3>
+                <button 
+                  onClick={() => setActiveShareHadith(null)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="modal-body">
+                {/* Pattern selector */}
+                <div style={{ textAlign: 'center', marginBottom: '0.8rem' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.6rem' }}>
+                    {language === 'arabic' ? 'اختر نمط الخلفية:' : 'Select Card Style:'}
+                  </span>
+                  <div className="share-pattern-bar">
+                    {[
+                      { id: 'emerald', color: '#04140D', label: 'Emerald' },
+                      { id: 'night', color: '#080D0A', label: 'Night' },
+                      { id: 'indigo', color: '#0A0D1A', label: 'Indigo' },
+                      { id: 'clay', color: '#B87B52', label: 'Clay' },
+                      { id: 'parchment', color: '#EFEBDE', label: 'Parchment' }
+                    ].map((pattern) => (
+                      <button
+                        key={pattern.id}
+                        type="button"
+                        className={`share-pattern-dot ${shareBgPattern === pattern.id ? 'active' : ''}`}
+                        style={{ backgroundColor: pattern.color }}
+                        onClick={() => setShareBgPattern(pattern.id as any)}
+                        title={pattern.label}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* The Card mockup canvas */}
+                <div className={`share-card-canvas share-bg-${shareBgPattern}`}>
+                  <p className="share-card-arabic" style={{ fontFamily: arabicFont }}>
+                    {activeShareHadith.arabic}
+                  </p>
+                  
+                  <p className="share-card-english">
+                    {activeShareHadith.translation}
+                  </p>
+
+                  <div className="share-card-meta">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', textAlign: 'left' }}>
+                      <span style={{ fontWeight: 600 }}>Sahih Al-Bukhari</span>
+                      <span style={{ opacity: 0.8, fontSize: '0.68rem' }}>
+                        Hadith {formatNumber(activeShareHadith.number)} • Book {activeShareHadith.kitab}
+                      </span>
+                    </div>
+                    <span className="share-card-logo" style={{ color: shareBgPattern === 'parchment' ? 'var(--accent-emerald)' : 'var(--accent-gold)' }}>
+                      UMMUHAT
+                    </span>
+                  </div>
+                </div>
+
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '1.5rem', fontStyle: 'italic' }}>
+                  {language === 'arabic' ? '💡 نصيحة: التقط لقطة شاشة (Screenshot) للبطاقة أعلاه لمشاركتها مباشرة على حالات واتساب أو شبكات التواصل الاجتماعي!' : '💡 Tip: Take a screenshot of the card above to share directly on WhatsApp status or social stories!'}
+                </p>
+
+                {/* Sharing Actions */}
+                <div className="share-card-actions">
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={() => handleCopyFormattedShare(activeShareHadith)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                  >
+                    <Share2 size={16} />
+                    <span>{language === 'arabic' ? 'نسخ النص بالكامل للمشاركة' : 'Copy Full Share Text'}</span>
+                  </button>
+                  
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className="glass-card"
+                      onClick={() => handleCopyArabic(activeShareHadith)}
+                      style={{ 
+                        flex: 1, 
+                        padding: '0.8rem', 
+                        fontSize: '0.85rem', 
+                        cursor: 'pointer', 
+                        border: '1px solid var(--glass-border)', 
+                        background: 'transparent',
+                        color: 'var(--text-primary)',
+                        borderRadius: '12px'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-emerald)'}
+                      onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+                    >
+                      <Copy size={14} style={{ marginRight: '0.4rem' }} />
+                      {language === 'arabic' ? 'العربية' : 'Arabic'}
+                    </button>
+                    
+                    <button
+                      type="button"
+                      className="glass-card"
+                      onClick={() => handleCopyEnglish(activeShareHadith)}
+                      style={{ 
+                        flex: 1, 
+                        padding: '0.8rem', 
+                        fontSize: '0.85rem', 
+                        cursor: 'pointer', 
+                        border: '1px solid var(--glass-border)', 
+                        background: 'transparent',
+                        color: 'var(--text-primary)',
+                        borderRadius: '12px'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-emerald)'}
+                      onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+                    >
+                      <Copy size={14} style={{ marginRight: '0.4rem' }} />
+                      {language === 'arabic' ? 'الإنجليزية' : 'English'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -1601,4 +1601,462 @@ body {
 }
 
 
+/* ==========================================
+   DASHBOARD ENHANCEMENTS STYLES
+   ========================================== */
+
+/* 1. Text-to-Speech Wave Visualizer */
+.tts-controls-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.tts-wave-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 18px;
+  width: 28px;
+  padding-bottom: 2px;
+}
+
+.tts-bar {
+  width: 3px;
+  height: 4px;
+  background-color: var(--accent-gold);
+  border-radius: 2px;
+  transition: height 0.2s ease;
+}
+
+.tts-bar.animating {
+  animation: tts-pulse 1.2s ease-in-out infinite alternate;
+}
+
+.tts-bar:nth-child(1) { animation-delay: 0.1s; }
+.tts-bar:nth-child(2) { animation-delay: 0.3s; }
+.tts-bar:nth-child(3) { animation-delay: 0.5s; }
+.tts-bar:nth-child(4) { animation-delay: 0.2s; }
+
+@keyframes tts-pulse {
+  0% { height: 4px; }
+  100% { height: 16px; }
+}
+
+.shuffle-icon-btn, .tts-icon-btn {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.45rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.shuffle-icon-btn:hover, .tts-icon-btn:hover {
+  background: var(--accent-emerald-light);
+  color: var(--accent-emerald);
+  border-color: var(--accent-emerald);
+  transform: scale(1.08);
+}
+
+.tts-icon-btn.playing {
+  background: var(--accent-gold);
+  background-image: linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.25) 100%);
+  color: #000000;
+  border-color: var(--accent-gold);
+}
+
+/* 2. Reading Analytics Card */
+.analytics-journey-card {
+  margin-bottom: 3rem;
+  border: 1px solid var(--glass-border);
+  overflow: hidden;
+  position: relative;
+}
+
+.analytics-header-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: inherit;
+}
+
+.analytics-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: transform 0.3s ease;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 2rem;
+  margin-top: 1.5rem;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+}
+
+.progress-circle-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.8rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.progress-ring-circle {
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+.progress-ring-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  fill: var(--text-primary);
+  font-family: inherit;
+}
+
+/* 7-Day Reading Chart */
+.activity-chart-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  height: 100%;
+  justify-content: space-between;
+}
+
+.activity-chart-bars {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 110px;
+  padding: 0 0.5rem;
+  position: relative;
+}
+
+.activity-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 12%;
+  position: relative;
+}
+
+.activity-bar {
+  width: 100%;
+  background: linear-gradient(to top, var(--accent-emerald) 0%, var(--accent-gold) 100%);
+  border-radius: 4px 4px 0 0;
+  min-height: 4px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  cursor: pointer;
+}
+
+.activity-bar:hover {
+  filter: brightness(1.2);
+  box-shadow: 0 0 10px var(--accent-emerald);
+}
+
+.activity-bar-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  background: #121a15;
+  border: 1px solid var(--accent-emerald);
+  color: #ffffff;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 5;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.activity-bar-wrapper:hover .activity-bar-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.activity-bar-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+/* 3. Badge Achievements System */
+.badge-achievements-section {
+  margin-top: 2rem;
+  border-top: 1px solid var(--glass-border);
+  padding-top: 1.5rem;
+}
+
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+  .badge-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .badge-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.badge-card {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  padding: 1rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  cursor: help;
+}
+
+.badge-card.unlocked {
+  background: rgba(46, 159, 133, 0.04);
+  border-color: rgba(46, 159, 133, 0.15);
+}
+
+.badge-card.unlocked:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent-gold);
+  box-shadow: 0 8px 24px rgba(210, 183, 115, 0.12);
+}
+
+.badge-circle {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid var(--glass-border);
+  color: var(--text-secondary);
+  transition: all 0.3s ease;
+}
+
+.badge-card.unlocked .badge-circle {
+  background: linear-gradient(135deg, rgba(46, 159, 133, 0.2) 0%, rgba(210, 183, 115, 0.2) 100%);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+  box-shadow: 0 0 10px rgba(210, 183, 115, 0.2);
+}
+
+.badge-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.badge-card.unlocked .badge-name {
+  color: var(--text-primary);
+}
+
+.badge-desc {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  opacity: 0.8;
+  line-height: 1.25;
+}
+
+/* 4. Narrator Spotlight Card */
+.narrator-spotlight-card {
+  margin-bottom: 3rem;
+  background: linear-gradient(135deg, var(--glass-bg) 0%, rgba(46, 159, 133, 0.03) 100%);
+  border-left: 4px solid var(--accent-emerald);
+  position: relative;
+  overflow: hidden;
+}
+
+.narrator-spotlight-card::before {
+  content: '🕌';
+  position: absolute;
+  bottom: 0.8rem;
+  right: 1.2rem;
+  font-size: 2.2rem;
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+/* 5. Share Card Preview Modal & Patterns */
+.share-pattern-bar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  justify-content: center;
+}
+
+.share-pattern-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.25s ease;
+}
+
+.share-pattern-dot.active {
+  border-color: #ffffff;
+  transform: scale(1.15);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.share-card-canvas {
+  width: 100%;
+  min-height: 320px;
+  border-radius: 20px;
+  padding: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* Premium Background Patterns */
+.share-bg-night {
+  background: radial-gradient(circle at top left, #121e15 0%, #060907 100%);
+  color: #e4ebe6;
+}
+.share-bg-emerald {
+  background: radial-gradient(circle at center, #062b1b 0%, #03140d 100%);
+  color: #e6f7ef;
+}
+.share-bg-indigo {
+  background: radial-gradient(circle at center, #0f1530 0%, #050711 100%);
+  color: #e7ebf7;
+}
+.share-bg-clay {
+  background: radial-gradient(circle at center, #bf8156 0%, #59351e 100%);
+  color: #fffaf7;
+}
+.share-bg-parchment {
+  background: radial-gradient(circle at center, #fbfaf5 0%, #ebdcb9 100%);
+  color: #3b2c15;
+  text-shadow: none !important;
+  border-color: rgba(59, 44, 21, 0.15) !important;
+}
+
+/* Watermark Ornaments on share card */
+.share-card-canvas::before {
+  content: '۞';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 15rem;
+  opacity: 0.035;
+  pointer-events: none;
+}
+
+.share-bg-parchment::before {
+  opacity: 0.055;
+}
+
+.share-card-arabic {
+  font-size: 1.5rem;
+  line-height: 2;
+  text-align: center;
+  direction: rtl;
+  margin: 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.share-card-english {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  text-align: center;
+  font-style: italic;
+  margin: 0;
+  max-height: 120px;
+  overflow-y: auto;
+  opacity: 0.9;
+}
+
+.share-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  opacity: 0.8;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.8rem;
+  margin-top: auto;
+}
+
+.share-bg-parchment .share-card-meta {
+  border-top-color: rgba(59, 44, 21, 0.12);
+}
+
+.share-card-logo {
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.share-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.8rem;
+}
+
+@media (max-width: 480px) {
+  .share-card-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+
 
