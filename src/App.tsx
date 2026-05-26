@@ -373,6 +373,9 @@ const App: React.FC = () => {
     return localStorage.getItem('bukhari_active_reading_plan') || 'none';
   });
 
+  const [ruwaatSubTab, setRuwaatSubTab] = useState<'author' | 'narrators'>('author');
+  const [isAuthorBioExpanded, setIsAuthorBioExpanded] = useState(false);
+
   // Handle SpeechSynthesis audio player cleanup
   useEffect(() => {
     // If user navigates away from Home tab, or if dailyHadith changes, stop narration
@@ -1823,7 +1826,7 @@ const App: React.FC = () => {
                     <Sparkles size={18} />
                     <span>{t.spiritualOasis}</span>
                   </div>
-                  <h1>{t.bukhariTitle}</h1>
+                  <h1 className={language === 'arabic' ? 'arabic-text' : ''}>{t.bukhariTitle}</h1>
                   <p>{t.welcomeDesc}</p>
                 </div>
 
@@ -2381,35 +2384,11 @@ const App: React.FC = () => {
                 })()}
 
                 {/* Dashboard Footer */}
-                <footer className="dashboard-footer" style={{
-                  marginTop: '4.5rem',
-                  paddingTop: '2.5rem',
-                  borderTop: '1px solid var(--glass-border)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '1.5rem',
-                  textAlign: 'center'
-                }}>
+                <footer className="dashboard-footer">
                   {/* Spiritual Prayer Card */}
-                  <div className="prayer-card" style={{
-                    background: 'linear-gradient(135deg, rgba(210, 183, 115, 0.05) 0%, rgba(46, 159, 133, 0.05) 100%)',
-                    border: '1px solid rgba(210, 183, 115, 0.25)',
-                    borderRadius: '16px',
-                    padding: '1.5rem 2rem',
-                    maxWidth: '550px',
-                    width: '100%',
-                    position: 'relative',
-                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
-                  }}>
-                    <span style={{ display: 'block', fontSize: '1.3rem', marginBottom: '0.5rem', color: 'var(--accent-gold)' }}>🤲</span>
-                    <p style={{
-                      fontStyle: 'italic',
-                      lineHeight: '1.6',
-                      color: 'var(--text-primary)',
-                      fontFamily: language === 'arabic' ? 'var(--font-arabic)' : 'inherit',
-                      fontSize: language === 'arabic' ? '1.25rem' : '0.92rem'
-                    }}>
+                  <div className="prayer-card">
+                    <span className="prayer-card-emoji">🤲</span>
+                    <p className={`prayer-card-text ${language === 'arabic' ? 'arabic-text' : ''}`}>
                       {language === 'arabic' ? (
                         "«نسألك يا الله بفضلك وكرمك أن تغفر لي ولوالدي ولأهلي وعائلتي، وأن ترزقني الذرية الصالحة الطيبة المعافاة يا ذا الجلال والإكرام. فضلاً، لا تنسونا وعائلتنا من صالح دعائكم.»"
                       ) : (
@@ -2419,7 +2398,7 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Copyright and Credits */}
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                  <div className={`copyright-credits ${language === 'arabic' ? 'arabic-text' : ''}`}>
                     <p>
                       {language === 'arabic' ? (
                         <>
@@ -2436,15 +2415,7 @@ const App: React.FC = () => {
                       <button 
                         type="button" 
                         onClick={() => setShowPrivacyModal(true)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--accent-emerald)',
-                          cursor: 'pointer',
-                          textDecoration: 'underline',
-                          fontSize: '0.8rem',
-                          padding: 0
-                        }}
+                        className="privacy-btn"
                       >
                         {language === 'arabic' ? 'سياسة الخصوصية' : 'Privacy Policy'}
                       </button>
@@ -3250,71 +3221,260 @@ const App: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
               >
-                <div style={{ marginBottom: '3rem' }}>
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: 500, marginBottom: '0.5rem' }}>{t.ruwaatTitle}</h2>
+                <div style={{ marginBottom: '2.5rem', textAlign: 'center' }}>
+                  <h2 style={{ fontSize: '1.5rem', fontWeight: 500, marginBottom: '0.5rem' }}>
+                    {language === 'arabic' ? 'المؤلف والرواة' : 'The Author & Narrators'}
+                  </h2>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                    {t.ruwaatDesc}
+                    {language === 'arabic' 
+                      ? 'تعرف على سيرة الإمام البخاري (المؤلف) والصحابة الكرام الذين نقلوا أحاديث وسنن النبي ﷺ.' 
+                      : 'Explore the life of Imam al-Bukhari (the Compiler) and the noble companions who narrated the Prophet’s sunnah.'}
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  {ruwaatsData.map((narrator) => {
-                    const isExpanded = expandedNarrator === narrator.id;
-                    return (
-                      <div 
-                        key={narrator.id} 
-                        className="narrator-card"
-                        style={{ cursor: 'pointer', border: '1px solid var(--glass-border)' }}
-                        onClick={() => setExpandedNarrator(isExpanded ? null : narrator.id)}
-                      >
-                        <div className="narrator-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              {language === 'arabic' ? narrator.arabicName : narrator.name}
-                              {language !== 'arabic' && (
-                                <span style={{ fontSize: '1rem', color: 'var(--accent-emerald)', fontFamily: 'var(--font-arabic)' }}>
-                                  ({narrator.arabicName})
-                                </span>
-                              )}
-                            </h3>
-                            <span className="narrator-title" style={{ fontSize: '0.8rem', color: 'var(--accent-gold)' }}>
-                              {language === 'arabic' ? narrator.titleArabic : narrator.title}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <span style={{ fontSize: '0.85rem', background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)', padding: '0.3rem 0.6rem', borderRadius: '8px', fontWeight: 600 }}>
-                              {formatNumber(narrator.totalNarrations)} {t.hadithsCount}
-                            </span>
-                            {isExpanded ? <ChevronDown size={18} /> : (language === 'arabic' ? <ChevronLeft size={18} /> : <ChevronRight size={18} />)}
-                          </div>
-                        </div>
-
-                        <AnimatePresence>
-                          {isExpanded && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.3 }}
-                              style={{ overflow: 'hidden' }}
-                            >
-                              <p style={{ 
-                                color: 'var(--text-secondary)', 
-                                fontSize: '0.95rem', 
-                                lineHeight: 1.7, 
-                                paddingTop: '1rem', 
-                                fontStyle: 'italic',
-                                textAlign: language === 'arabic' ? 'right' : 'left'
-                              }}>
-                                {language === 'arabic' ? narrator.bioArabic : narrator.bio}
-                              </p>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
+                {/* Segmented Sub-nav Bar */}
+                <div className="sub-tab-nav">
+                  <button
+                    type="button"
+                    className={`sub-tab-btn ${ruwaatSubTab === 'author' ? 'active' : ''}`}
+                    onClick={() => setRuwaatSubTab('author')}
+                  >
+                    <span>✒️</span>
+                    <span>{language === 'arabic' ? 'سيرة المؤلف' : 'Imam Al-Bukhari'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sub-tab-btn ${ruwaatSubTab === 'narrators' ? 'active' : ''}`}
+                    onClick={() => setRuwaatSubTab('narrators')}
+                  >
+                    <span>👥</span>
+                    <span>{language === 'arabic' ? 'رواة الأحاديث' : 'Hadith Narrators'}</span>
+                  </button>
                 </div>
+
+                {ruwaatSubTab === 'author' ? (
+                  /* 1. Imam Al-Bukhari Premium Card */
+                  <div className="glass-card author-featured-card" style={{ padding: '2rem', marginBottom: '3rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                      <div style={{ textAlign: language === 'arabic' ? 'right' : 'left' }}>
+                        <div className="author-title-badge" style={{ marginBottom: '0.8rem' }}>
+                          <Award size={13} />
+                          {language === 'arabic' ? 'أمير المؤمنين في الحديث' : 'Commander of the Faithful in Hadith'}
+                        </div>
+                        <h2 style={{ fontSize: '1.8rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: language === 'arabic' ? 'var(--font-arabic)' : 'inherit' }}>
+                          {language === 'arabic' ? 'الإمام أبو عبد الله البخاري' : 'Imam Al-Bukhari'}
+                        </h2>
+                        <span style={{ fontSize: '0.9rem', color: 'var(--accent-emerald)', fontWeight: 500, display: 'block', marginTop: '0.2rem' }}>
+                          {language === 'arabic' 
+                            ? 'محمد بن إسماعيل بن إبراهيم البخاري' 
+                            : 'Muhammad ibn Isma\'il al-Bukhari'}
+                        </span>
+                      </div>
+                      
+                      {/* Compilation Stat Badge */}
+                      <div style={{ background: 'var(--accent-gold-light)', border: '1px solid rgba(210, 183, 115, 0.3)', padding: '0.5rem 1rem', borderRadius: '12px', textAlign: 'center' }}>
+                        <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: 700, color: 'var(--accent-gold)' }}>
+                          {formatNumber('16')}
+                        </span>
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {language === 'arabic' ? 'عاماً من البحث والجمع' : 'Years of Compilation'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.94rem', lineHeight: 1.65, marginTop: '1.2rem', marginBottom: '1.8rem', textAlign: language === 'arabic' ? 'right' : 'left' }}>
+                      {language === 'arabic' 
+                        ? 'هو إمام الحفاظ وجامع أصح كتب السنة النبوية المطهرة. ولد في بخارى ونشأ يتيماً، فكرس حياته للارتحال طلباً للعلم وحفظ السنن، واشتهر بالورع والتقوى والذكاء الخارق والذاكرة الفولاذية.' 
+                        : 'The legendary Islamic scholar and master of prophetic traditions. Born in Bukhara, Uzbekistan, he grew up as an orphan and dedicated his life to traveling across the Islamic world to collect, verify, and document authentic hadiths.'}
+                    </p>
+
+                    {/* Author Fact Grid */}
+                    <div className="author-fact-grid">
+                      <div className="author-fact-box">
+                        <div className="author-fact-value">{formatNumber('194 AH')}</div>
+                        <div className="author-fact-label">{language === 'arabic' ? 'الميلاد (بخارى)' : 'Birth (Bukhara)'}</div>
+                      </div>
+                      <div className="author-fact-box">
+                        <div className="author-fact-value">{formatNumber('256 AH')}</div>
+                        <div className="author-fact-label">{language === 'arabic' ? 'الوفاة (خرتنك)' : 'Death (Khartank)'}</div>
+                      </div>
+                      <div className="author-fact-box">
+                        <div className="author-fact-value">{formatNumber('600,000')}</div>
+                        <div className="author-fact-label">{language === 'arabic' ? 'حديث خضع للتمحيص' : 'Hadiths Screened'}</div>
+                      </div>
+                      <div className="author-fact-box">
+                        <div className="author-fact-value">{formatNumber('7,276')}</div>
+                        <div className="author-fact-label">{language === 'arabic' ? 'حديث في الصحيح' : 'Hadiths in Sahih'}</div>
+                      </div>
+                    </div>
+
+                    {/* Famous Devotional Quote */}
+                    <div className="author-quote-box">
+                      <p className="author-quote-text" style={{ textAlign: language === 'arabic' ? 'right' : 'left', fontFamily: language === 'arabic' ? 'var(--font-arabic)' : 'inherit', fontSize: language === 'arabic' ? '1.15rem' : '0.95rem' }}>
+                        {language === 'arabic' 
+                          ? '«ما وضعت في كتابي الصحيح حديثًا إلا اغتسلت قبل ذلك وصليت ركعتين.»' 
+                          : '"I did not write any Hadith in this book except that I performed a bath (ghusl) and prayed two units of prayer (rak\'ah) first."'}
+                      </p>
+                    </div>
+
+                    {/* Expandable biography text toggled by button */}
+                    <div style={{ textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => setIsAuthorBioExpanded(!isAuthorBioExpanded)}
+                        className="glass-card"
+                        style={{
+                          padding: '0.6rem 1.4rem',
+                          fontSize: '0.85rem',
+                          borderRadius: '12px',
+                          border: '1px solid var(--glass-border)',
+                          cursor: 'pointer',
+                          color: 'var(--text-primary)',
+                          background: 'transparent',
+                          transition: 'all 0.2s ease',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-gold)'}
+                        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+                      >
+                        <span>{isAuthorBioExpanded 
+                          ? (language === 'arabic' ? 'إغلاق التفاصيل' : 'Hide Details') 
+                          : (language === 'arabic' ? 'اقرأ سيرة الإمام كاملة' : 'Read Full Biography')}</span>
+                        <ChevronDown size={14} style={{ transform: isAuthorBioExpanded ? 'rotate(180deg)' : 'rotate(0)' }} />
+                      </button>
+                    </div>
+
+                    <AnimatePresence>
+                      {isAuthorBioExpanded && (
+                        <motion.div
+                          className="author-expanded-story"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.35 }}
+                          style={{ overflow: 'hidden', textAlign: language === 'arabic' ? 'right' : 'left' }}
+                        >
+                          {/* 1. Journey */}
+                          <div className="author-section-heading">
+                            {language === 'arabic' ? 'رحلته في طلب العلم والاستقصاء' : 'His Journeys for Hadith'}
+                          </div>
+                          <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '1.25rem' }}>
+                            {language === 'arabic'
+                              ? 'سافر الإمام البخاري في سن السادسة عشرة بصحبة أمه وأخيه لأداء مناسك الحج، وبقي هناك في الحجاز مجاوراً لطلب العلم. ثم رحل طيلة ستة عشر عاماً إلى معظم عواصم العلم الإسلامي آنذاك، فارتحل إلى البصرة، الكوفة، بغداد، المدينة، مكة، مصر، الشام، والري. ولقي خلال رحلاته أكثر من ألف شيخ ومحدث، وكتب وصنف تاريخه الشهير وهو بجوار قبر النبي ﷺ.'
+                              : 'At the young age of 16, he set off for pilgrimage in Makkah alongside his mother and brother, remaining in the Hijaz to study under its elite scholars. He spent the next 16 years traveling through Iraq, Syria, Egypt, Basra, Kufa, Baghdad, and the Levant. Throughout these extensive travels, he met over a thousand scholars, recording and cross-referencing chains of transmissions.'}
+                          </p>
+
+                          {/* 2. Conditions */}
+                          <div className="author-section-heading">
+                            {language === 'arabic' ? 'شروط البخاري الصارمة لتصحيح الحديث' : 'His Strict Conditions of Authenticity'}
+                          </div>
+                          <ul className="author-conditions-list">
+                            <li className="author-condition-item">
+                              <span className="author-condition-bullet">✦</span>
+                              <div>
+                                <strong>{language === 'arabic' ? 'الاتصال الكامل للسند:' : 'Connected Chain (Ittisal):'}</strong>{' '}
+                                {language === 'arabic' ? 'يجب أن يكون السند متصلاً اتصالاً قاطعاً دون أي انقطاع أو إرسال.' : 'Every narrator must have received the Hadith directly from the previous authority.'}
+                              </div>
+                            </li>
+                            <li className="author-condition-item">
+                              <span className="author-condition-bullet">✦</span>
+                              <div>
+                                <strong>{language === 'arabic' ? 'عدالة الرواة وضبطهم:' : 'Integrity & Precision (Adalah & Dabt):'}</strong>{' '}
+                                {language === 'arabic' ? 'كل راوٍ في السند يجب أن يكون معروفاً بالأمانة الدينية والصدق، والدقة البالغة في الحفظ والنقل.' : 'Narrators must possess high religious and moral character, alongside flawless memorization.'}
+                              </div>
+                            </li>
+                            <li className="author-condition-item">
+                              <span className="author-condition-bullet">✦</span>
+                              <div>
+                                <strong>{language === 'arabic' ? 'إثبات اللقاء والملاقاة المعاصرة:' : 'Proven Contact (Liqa\'):'}</strong>{' '}
+                                {language === 'arabic' ? 'تميز البخاري بشرطه الفريد وهو إثبات التقاء كل راوٍ بشيخه ولو لمرة واحدة في حياتهما، ولا يكتفي بمجرد المعاصرة الزمنية.' : 'Unique to Imam Bukhari, he required absolute proof that two consecutive narrators in the chain met face-to-face, not merely lived at the same time.'}
+                              </div>
+                            </li>
+                            <li className="author-condition-item">
+                              <span className="author-condition-bullet">✦</span>
+                              <div>
+                                <strong>{language === 'arabic' ? 'السلامة من الشذوذ والعلة القادحة:' : 'Free from Shadhdh & \'Illah:'}</strong>{' '}
+                                {language === 'arabic' ? 'ألا يكون متن الحديث أو إسناده شاذاً أو معلولاً بعلة خفية تقدح في صحته.' : 'The tradition must not contradict a stronger source or contain subtle defects in its wording or chain.'}
+                              </div>
+                            </li>
+                          </ul>
+
+                          {/* 3. Memory test */}
+                          <div className="author-section-heading">
+                            {language === 'arabic' ? 'حفظه وقصة اختبار بغداد الشهيرة' : 'His Miraculous Memory: The Baghdad Test'}
+                          </div>
+                          <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 0 }}>
+                            {language === 'arabic'
+                              ? 'عندما قدم بغداد، أراد علماء الحديث اختبار قوة حفظه؛ فاجتمع عشرة علماء، وقام كل واحد منهم بتركيب متون أحاديث على أسانيد غير أسانيدها (بقلب مائة حديث). فلما ألقوها عليه، كان جوابه لكل حديث: «لا أعرفه». فظن الجهال أنه عاجز، بينما علم العلماء أنه أدرك الاختبار. فلما فرغوا، قام بسرد الأحاديث المائة بخلطها الذي ذكروه، ثم رد كل متن إلى إسناده الصحيح واحداً تلو الآخر بالترتيب دون خطأ واحد، فأقر له الجميع بالحفظ والسيادة.'
+                              : 'Upon his arrival in Baghdad, ten prominent scholars gathered to test his memory. They shuffled the chains of transmission (sanad) of 100 hadiths, changing which narrator went with which text. They recited them to him one by one. To each, he replied, "I do not recognize it." The crowd thought he was ignorant, but the scholars knew he saw the test. Once they finished, he repeated all 100 wrong versions exactly as they had read them, and then paired each text back to its correct chain from memory, completely flawless. The scholars stood up and bowed in respect of his unparalleled mastery.'}
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  /* 2. Standard Narrators loop */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    {ruwaatsData.map((narrator) => {
+                      const isExpanded = expandedNarrator === narrator.id;
+                      return (
+                        <div 
+                          key={narrator.id} 
+                          className="narrator-card"
+                          style={{ cursor: 'pointer', border: '1px solid var(--glass-border)' }}
+                          onClick={() => setExpandedNarrator(isExpanded ? null : narrator.id)}
+                        >
+                          <div className="narrator-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <h3 style={{ fontSize: '1.2rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                {language === 'arabic' ? narrator.arabicName : narrator.name}
+                                {language !== 'arabic' && (
+                                  <span style={{ fontSize: '1rem', color: 'var(--accent-emerald)', fontFamily: 'var(--font-arabic)' }}>
+                                    ({narrator.arabicName})
+                                  </span>
+                                )}
+                              </h3>
+                              <span className="narrator-title" style={{ fontSize: '0.8rem', color: 'var(--accent-gold)' }}>
+                                {language === 'arabic' ? narrator.titleArabic : narrator.title}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                              <span style={{ fontSize: '0.85rem', background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)', padding: '0.3rem 0.6rem', borderRadius: '8px', fontWeight: 600 }}>
+                                {formatNumber(narrator.totalNarrations)} {t.hadithsCount}
+                              </span>
+                              {isExpanded ? <ChevronDown size={18} /> : (language === 'arabic' ? <ChevronLeft size={18} /> : <ChevronRight size={18} />)}
+                            </div>
+                          </div>
+
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3 }}
+                                style={{ overflow: 'hidden' }}
+                              >
+                                <p style={{ 
+                                  color: 'var(--text-secondary)', 
+                                  fontSize: '0.95rem', 
+                                  lineHeight: 1.7, 
+                                  paddingTop: '1rem', 
+                                  fontStyle: 'italic',
+                                  textAlign: language === 'arabic' ? 'right' : 'left'
+                                }}>
+                                  {language === 'arabic' ? narrator.bioArabic : narrator.bio}
+                                </p>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </motion.div>
             )}
 

@@ -19,31 +19,7 @@ function normalizeArabic(text: string): string {
     .replace(/\u0640/g, '');
 }
 
-// Smart query matcher that handles singular/plural endings in Arabic
-function matchesArabicQuery(normText: string, normQuery: string, originalQuery: string): boolean {
-  if (normText.includes(normQuery)) return true;
-  
-  // If original query ends with 'ة' or 'ه', also try matching with 'ات' (plural suffix)
-  const cleanOriginal = originalQuery.trim();
-  if (cleanOriginal.endsWith('ة') || cleanOriginal.endsWith('ه')) {
-    const altQuery = normalizeArabic(cleanOriginal.slice(0, -1) + 'ات');
-    if (normText.includes(altQuery)) return true;
-  }
-  
-  // If original query ends with 'ات', also try matching with 'ه' / 'ة' (singular suffix)
-  if (cleanOriginal.endsWith('ات')) {
-    const altQuery = normalizeArabic(cleanOriginal.slice(0, -2) + 'ه');
-    if (normText.includes(altQuery)) return true;
-  }
 
-  // Also try matching the core stem (without 'ال')
-  if (cleanOriginal.startsWith('ال')) {
-    const altQuery = normalizeArabic(cleanOriginal.slice(2));
-    if (normText.includes(altQuery)) return true;
-  }
-
-  return false;
-}
 
 // Local search pool including static data and localStorage caches
 function getLocalSearchPool(): Hadith[] {
@@ -90,33 +66,144 @@ function getLocalSearchPool(): Hadith[] {
   return pool;
 }
 
-// Search locally using smart normalizations
-function searchLocalPool(query: string): Hadith[] {
-  const normQuery = normalizeArabic(query).toLowerCase().trim();
-  if (!normQuery) return [];
+// Helper to calculate Levenshtein distance between two words
+function getLevenshteinDistance(s1: string, s2: string): number {
+  const len1 = s1.length;
+  const len2 = s2.length;
+  if (len1 === 0) return len2;
+  if (len2 === 0) return len1;
+
+  const dp = new Array(len2 + 1);
+  for (let j = 0; j <= len2; j++) dp[j] = j;
+
+  for (let i = 1; i <= len1; i++) {
+    let prev = i;
+    for (let j = 1; j <= len2; j++) {
+      const temp = dp[j];
+      if (s1[i - 1] === s2[j - 1]) {
+        dp[j] = dp[j - 1]; // no change
+      } else {
+        dp[j] = Math.min(
+          dp[j] + 1, // deletion
+          prev + 1,  // insertion
+          dp[j - 1] + 1 // substitution
+        );
+      }
+      dp[j - 1] = prev;
+      prev = temp;
+    }
+    dp[len2] = prev;
+  }
+  return dp[len2];
+}
+
+// Check if two words are a fuzzy match
+function isFuzzyWordMatch(word1: string, word2: string): boolean {
+  if (word1 === word2) return true;
+  
+  // Calculate threshold: 30% of the longer word length, max 2 edits
+  const maxLen = Math.max(word1.length, word2.length);
+  if (maxLen <= 2) return word1 === word2;
+  
+  const threshold = maxLen <= 4 ? 1 : 2;
+  return getLevenshteinDistance(word1, word2) <= threshold;
+}
+
+interface ScoredHadith {
+  hadith: Hadith;
+  score: number;
+}
+
+// Search locally using tokenization, fuzzy checks, and relevance scoring
+export function searchLocalPool(query: string): Hadith[] {
+  const cleanQuery = query.toLowerCase().trim();
+  if (!cleanQuery) return [];
+
+  const isArabic = /[\u0600-\u06FF]/.test(cleanQuery);
+  const normQuery = normalizeArabic(cleanQuery);
+  const queryTokens = normQuery.split(/\s+/).filter(t => t.length > 1);
 
   const pool = getLocalSearchPool();
-  return pool.filter(h => {
-    const normArabic = normalizeArabic(h.arabic).toLowerCase();
-    const normTranslation = (h.translation || '').toLowerCase();
+  const scoredResults: ScoredHadith[] = [];
+
+  for (const h of pool) {
+    let score = 0;
+    
+    // Normalizations for matching
+    const arabicText = h.arabic || '';
+    const translationText = h.translation || '';
+    const normArabic = normalizeArabic(arabicText).toLowerCase();
+    const normTranslation = translationText.toLowerCase();
     const normKitab = (h.kitab || '').toLowerCase();
     const normKitabArabic = normalizeArabic(h.kitabArabic || '').toLowerCase();
     const normBab = (h.bab || '').toLowerCase();
     const normBabArabic = normalizeArabic(h.babArabic || '').toLowerCase();
     const normNarrator = (h.englishNarrator || '').toLowerCase();
 
-    // Check query matches
-    const queryInArabic = matchesArabicQuery(normArabic, normQuery, query) || 
-                          matchesArabicQuery(normKitabArabic, normQuery, query) || 
-                          matchesArabicQuery(normBabArabic, normQuery, query);
-                          
-    const queryInEnglish = normTranslation.includes(normQuery) || 
-                           normKitab.includes(normQuery) || 
-                           normBab.includes(normQuery) || 
-                           normNarrator.includes(normQuery);
+    // 1. Exact phrase matches (highest points)
+    if (isArabic) {
+      if (normArabic.includes(normQuery)) {
+        score += 150;
+      } else if (normKitabArabic.includes(normQuery) || normBabArabic.includes(normQuery)) {
+        score += 100;
+      }
+    } else {
+      if (normTranslation.includes(normQuery)) {
+        score += 150;
+      } else if (normKitab.includes(normQuery) || normBab.includes(normQuery) || normNarrator.includes(normQuery)) {
+        score += 100;
+      }
+    }
 
-    return queryInArabic || queryInEnglish;
-  });
+    // 2. Token-level matching (exact and close/fuzzy matches)
+    if (queryTokens.length > 0) {
+      let matchedTokensCount = 0;
+      
+      for (const qToken of queryTokens) {
+        let tokenMatched = false;
+        
+        if (isArabic) {
+          // Arabic token matching (substring match)
+          if (normArabic.includes(qToken) || normKitabArabic.includes(qToken) || normBabArabic.includes(qToken)) {
+            score += 30;
+            tokenMatched = true;
+          }
+        } else {
+          // English token matching
+          // Direct substring
+          if (normTranslation.includes(qToken) || normKitab.includes(qToken) || normBab.includes(qToken) || normNarrator.includes(qToken)) {
+            score += 30;
+            tokenMatched = true;
+          } else {
+            // Fuzzy word match on English translation words
+            const targetWords = normTranslation.split(/[^a-zA-Z0-9]+/).filter(w => w.length > 1);
+            for (const tWord of targetWords) {
+              if (isFuzzyWordMatch(qToken, tWord)) {
+                score += 15; // Typo match
+                tokenMatched = true;
+                break;
+              }
+            }
+          }
+        }
+        
+        if (tokenMatched) matchedTokensCount++;
+      }
+      
+      // Bonus if ALL query tokens matched
+      if (matchedTokensCount === queryTokens.length) {
+        score += 50;
+      }
+    }
+
+    if (score > 0) {
+      scoredResults.push({ hadith: h, score });
+    }
+  }
+
+  // Sort by score in descending order
+  scoredResults.sort((a, b) => b.score - a.score);
+  return scoredResults.map(r => r.hadith);
 }
 
 const BASE_URL = 'https://hadithapi.com/public/api';
@@ -243,47 +330,100 @@ export const api = {
     const isArabic = /[\u0600-\u06FF]/.test(query);
     const searchParam = isArabic ? 'hadithArabic' : 'hadithEnglish';
 
+    let onlineResults: Hadith[] = [];
     try {
       // Search hadiths with paginate=50 using appropriate language param
       const url = `${BASE_URL}/hadiths?apiKey=${encodeURIComponent(API_KEY)}&book=sahih-bukhari&${searchParam}=${encodeURIComponent(query)}&paginate=50`;
       const res = await fetch(url);
       
-      if (!res.ok) {
-        if (res.status === 404) {
-          // Fallback to local search if online API returns 404
-          return searchLocalPool(query);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.hadiths && data.hadiths.data && Array.isArray(data.hadiths.data)) {
+          onlineResults = data.hadiths.data.map((h: ApiHadith) => {
+            const chId = h.chapterId?.toString();
+            const activeChapter = chId ? chapterMap.get(chId) : undefined;
+            return this.mapApiHadith(h, activeChapter);
+          });
         }
-        throw new Error(`HTTP error ${res.status}`);
       }
-      const data = await res.json();
-
-      let onlineResults: Hadith[] = [];
-      if (data.hadiths && data.hadiths.data && Array.isArray(data.hadiths.data)) {
-        onlineResults = data.hadiths.data.map((h: ApiHadith) => {
-          const chId = h.chapterId?.toString();
-          const activeChapter = chId ? chapterMap.get(chId) : undefined;
-          return this.mapApiHadith(h, activeChapter);
-        });
-      }
-
-      // Merge online results with local search pool findings (ensuring no duplicates)
-      const localResults = searchLocalPool(query);
-      const merged = [...onlineResults];
-      const seenIds = new Set<number>(onlineResults.map(h => h.id));
-      
-      localResults.forEach(h => {
-        if (!seenIds.has(h.id)) {
-          merged.push(h);
-          seenIds.add(h.id);
-        }
-      });
-
-      return merged;
     } catch (error) {
-      console.error(`Failed to search hadiths for query "${query}":`, error);
-      // Fallback to local search on network or parse error
-      return searchLocalPool(query);
+      console.error(`Failed to fetch online hadiths for query "${query}":`, error);
     }
+
+    // Run the local fuzzy search to capture cached items and handle typos
+    const localResults = searchLocalPool(query);
+
+    // Merge results (avoiding duplicates)
+    const merged = [...onlineResults];
+    const seenIds = new Set<number>(onlineResults.map(h => h.id));
+    
+    localResults.forEach(h => {
+      if (!seenIds.has(h.id)) {
+        merged.push(h);
+        seenIds.add(h.id);
+      }
+    });
+
+    // Score all merged results to rank them properly
+    const cleanQuery = query.toLowerCase().trim();
+    const normQuery = normalizeArabic(cleanQuery);
+    const queryTokens = normQuery.split(/\s+/).filter(t => t.length > 1);
+
+    const rankedMerged = merged.map(h => {
+      let score = 0;
+      const normArabic = normalizeArabic(h.arabic || '').toLowerCase();
+      const normTranslation = (h.translation || '').toLowerCase();
+      const normKitab = (h.kitab || '').toLowerCase();
+      const normKitabArabic = normalizeArabic(h.kitabArabic || '').toLowerCase();
+      const normBab = (h.bab || '').toLowerCase();
+      const normBabArabic = normalizeArabic(h.babArabic || '').toLowerCase();
+      const normNarrator = (h.englishNarrator || '').toLowerCase();
+
+      // Exact phrase match
+      if (isArabic) {
+        if (normArabic.includes(normQuery)) score += 150;
+        else if (normKitabArabic.includes(normQuery) || normBabArabic.includes(normQuery)) score += 100;
+      } else {
+        if (normTranslation.includes(normQuery)) score += 150;
+        else if (normKitab.includes(normQuery) || normBab.includes(normQuery) || normNarrator.includes(normQuery)) score += 100;
+      }
+
+      // Token match
+      if (queryTokens.length > 0) {
+        let matched = 0;
+        for (const token of queryTokens) {
+          let tokenMatched = false;
+          if (isArabic) {
+            if (normArabic.includes(token) || normKitabArabic.includes(token) || normBabArabic.includes(token)) {
+              score += 30;
+              tokenMatched = true;
+            }
+          } else {
+            if (normTranslation.includes(token) || normKitab.includes(token) || normBab.includes(token) || normNarrator.includes(token)) {
+              score += 30;
+              tokenMatched = true;
+            } else {
+              const words = normTranslation.split(/[^a-zA-Z0-9]+/).filter(w => w.length > 1);
+              for (const w of words) {
+                if (isFuzzyWordMatch(token, w)) {
+                  score += 15;
+                  tokenMatched = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (tokenMatched) matched++;
+        }
+        if (matched === queryTokens.length) score += 50;
+      }
+      
+      return { hadith: h, score };
+    });
+
+    // Sort by relevance score in descending order
+    rankedMerged.sort((a, b) => b.score - a.score);
+    return rankedMerged.map(r => r.hadith);
   },
 
   mapApiHadith(h: ApiHadith, activeChapter?: Chapter): Hadith {
