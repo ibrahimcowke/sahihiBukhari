@@ -1835,9 +1835,12 @@ const App: React.FC = () => {
                     </button>
                   </div>
 
-                  <img src="/app-icon.png" alt="Sahih Bukhari Logo" className="welcome-app-logo" />
+                  <div className="welcome-logo-container">
+                    <div className="welcome-logo-glow" />
+                    <img src="/app-icon.png" alt="Sahih Bukhari Logo" className="welcome-app-logo" />
+                  </div>
                   <div className="welcome-tag">
-                    <Sparkles size={18} />
+                    <Sparkles size={14} />
                     <span>{t.spiritualOasis}</span>
                   </div>
                   <h1 className={language === 'arabic' ? 'arabic-text' : ''}>{t.bukhariTitle}</h1>
@@ -1847,24 +1850,36 @@ const App: React.FC = () => {
                 {/* Statistics Row */}
                 <div className="dashboard-grid">
                   <div className="stat-card">
+                    <div className="stat-card-icon-wrapper compiled">
+                      <BookOpen size={20} />
+                    </div>
                     <div className="stat-number">
                       {formatNumber('7,276')}
                     </div>
                     <div className="stat-label">{t.hadithsCompiled}</div>
                   </div>
                   <div className="stat-card">
+                    <div className="stat-card-icon-wrapper read">
+                      <CheckCircle size={20} />
+                    </div>
                     <div className="stat-number">
                       {formatNumber(readHadithIds.size)}
                     </div>
                     <div className="stat-label">{t.hadithsRead}</div>
                   </div>
                   <div className="stat-card">
+                    <div className="stat-card-icon-wrapper bookmarked">
+                      <Bookmark size={20} />
+                    </div>
                     <div className="stat-number">
                       {formatNumber(bookmarkedIds.length)}
                     </div>
                     <div className="stat-label">{t.savedMoments}</div>
                   </div>
                   <div className="stat-card">
+                    <div className="stat-card-icon-wrapper notes">
+                      <FileText size={20} />
+                    </div>
                     <div className="stat-number">
                       {formatNumber(notesWithHadiths.length)}
                     </div>
@@ -1877,7 +1892,7 @@ const App: React.FC = () => {
                 <div className="progress-streak-widget">
                   {/* Daily Goal Card */}
                   <div className="glass-card goal-card" style={{ padding: '1.75rem', border: '1px solid var(--glass-border)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
+                    <div style={{ display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexDirection: language === 'arabic' ? 'row-reverse' : 'row' }}>
                       <h4 style={{ color: 'var(--accent-gold)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>
                         {t.dailyGoal}
                       </h4>
@@ -1914,7 +1929,7 @@ const App: React.FC = () => {
                     <div className="streak-flame-container">
                       <Flame size={42} fill="currentColor" />
                     </div>
-                    <span style={{ fontSize: '1.8rem', fontWeight: 700, color: '#ff6b35', lineHeight: 1.1 }}>
+                    <span className="streak-number-text">
                       {formatNumber(streakCount)}
                     </span>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '0.2rem' }}>
