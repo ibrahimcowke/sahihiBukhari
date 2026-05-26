@@ -34,9 +34,12 @@ import {
   Palette,
   Award,
   Lock,
-  Activity
+  Activity,
+  Cloud,
+  RefreshCw
 } from 'lucide-react';
-import { db, isSupabaseConfigured } from './supabaseClient';
+import { db, isSupabaseConfigured, getOrInitUserId } from './supabaseClient';
+import type { UserProgressData } from './supabaseClient';
 import { ruwaatsData } from './ruwaats';
 import type { Theme, Hadith, ArabicFont, DisplayMode, TextAlignment, ReadingLayout } from './types';
 import { api } from './api';
@@ -187,7 +190,18 @@ const translations = {
     goalReachedTitle: "Daily Goal Reached! 🎉",
     goalReachedBody: "Congratulations! You have completed your daily reading goal of {0} Hadiths today.",
     dailyReminderTitle: "Time for Reflection 📖",
-    dailyReminderBody: "Read your curated Hadith of the day from Sahih Al-Bukhari."
+    dailyReminderBody: "Read your curated Hadith of the day from Sahih Al-Bukhari.",
+    backupSyncTitle: "Cloud Backup & Sync",
+    backupSyncDesc: "Sync your reading progress, bookmarks, notes, and settings to the cloud and restore them on any device.",
+    yourSyncCode: "Your Sync Code",
+    copyCode: "Copy Code",
+    syncCodeCopied: "Sync code copied to clipboard!",
+    restoreTitle: "Restore Backup",
+    restorePlaceholder: "Paste your sync code (UUID) here...",
+    restoreBtn: "Restore & Sync",
+    restoring: "Restoring...",
+    syncedWithCloud: "Synced with Cloud",
+    syncingText: "Syncing progress..."
   },
   arabic: {
     home: "الرئيسية",
@@ -331,7 +345,18 @@ const translations = {
     goalReachedTitle: "تم تحقيق الهدف اليومي! 🎉",
     goalReachedBody: "تهانينا! لقد أكملت هدف القراءة اليومي البالغ {0} أحاديث اليوم.",
     dailyReminderTitle: "وقت التدبر والقراءة 📖",
-    dailyReminderBody: "اقرأ حديث اليوم وتدبر معانيه من صحيح البخاري."
+    dailyReminderBody: "اقرأ حديث اليوم وتدبر معانيه من صحيح البخاري.",
+    backupSyncTitle: "النسخ الاحتياطي والمزامنة السحابية",
+    backupSyncDesc: "قم بمزامنة تقدم قراءتك، والمحفوظات، والملاحظات، والإعدادات سحابيًا واستعادتها على أي جهاز.",
+    yourSyncCode: "رمز المزامنة الخاص بك",
+    copyCode: "نسخ الرمز",
+    syncCodeCopied: "تم نسخ رمز المزامنة إلى الحافظة!",
+    restoreTitle: "استعادة النسخة الاحتياطية",
+    restorePlaceholder: "أدخل رمز المزامنة (UUID) هنا...",
+    restoreBtn: "استعادة ومزامنة",
+    restoring: "جاري الاستعادة...",
+    syncedWithCloud: "متصل ومزامن سحابياً",
+    syncingText: "جاري مزامنة التقدم..."
   }
 };
 
@@ -368,6 +393,11 @@ const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [playingHadithId, setPlayingHadithId] = useState<number | null>(null);
   const [committedSearchQuery, setCommittedSearchQuery] = useState('');
+
+  // Backup & sync states
+  const [backupCodeInput, setBackupCodeInput] = useState('');
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const isLoaded = useRef(false);
 
   // Dashboard enhancements states
   const [activeShareHadith, setActiveShareHadith] = useState<Hadith | null>(null);
@@ -657,6 +687,38 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Cloud Sync Callback
+  const syncProgressToDb = React.useCallback(async (overrides?: Partial<UserProgressData>) => {
+    if (!isSupabaseConfigured || !isOnline) return;
+    try {
+      const localSettings = {
+        ummuhat_language: localStorage.getItem('ummuhat_language') || 'arabic',
+        ummuhat_theme: localStorage.getItem('ummuhat_theme') || 'night',
+        sahihbukhari_reminders_enabled: localStorage.getItem('sahihbukhari_reminders_enabled') || 'false',
+        sahihbukhari_reminder_time: localStorage.getItem('sahihbukhari_reminder_time') || '09:00',
+        ummuhat_arabic_font: localStorage.getItem('ummuhat_arabic_font') || 'Amiri',
+        ummuhat_text_alignment: localStorage.getItem('ummuhat_text_alignment') || 'right',
+        ummuhat_show_sanad: localStorage.getItem('ummuhat_show_sanad') || 'true',
+        ummuhat_reading_layout: localStorage.getItem('ummuhat_reading_layout') || 'page',
+        ummuhat_arabic_font_size: localStorage.getItem('ummuhat_arabic_font_size') || '22',
+        ummuhat_translation_font_size: localStorage.getItem('ummuhat_translation_font_size') || '17',
+        bukhari_active_reading_plan: localStorage.getItem('bukhari_active_reading_plan') || 'none',
+      };
+      
+      const payload: Partial<UserProgressData> = {
+        streak_count: overrides?.hasOwnProperty('streak_count') ? overrides.streak_count! : streakCount,
+        last_read_date: overrides?.hasOwnProperty('last_read_date') ? overrides.last_read_date : localStorage.getItem('bukhari_last_read_date'),
+        daily_goal: overrides?.hasOwnProperty('daily_goal') ? overrides.daily_goal! : dailyGoal,
+        read_hadiths: overrides?.hasOwnProperty('read_hadiths') ? overrides.read_hadiths! : Array.from(readHadithIds),
+        read_history: overrides?.hasOwnProperty('read_history') ? overrides.read_history! : readHistory,
+        settings: overrides?.hasOwnProperty('settings') ? overrides.settings! : localSettings,
+      };
+      await db.syncUserProgress(payload);
+    } catch (err) {
+      console.warn("Failed to sync progress to cloud database:", err);
+    }
+  }, [streakCount, dailyGoal, readHadithIds, readHistory, isOnline]);
+
   // Initial Load
   useEffect(() => {
     const loadData = async () => {
@@ -666,6 +728,113 @@ const App: React.FC = () => {
         // 1. Fetch Chapters list from API
         const data = await api.fetchChapters();
         setChapters(data);
+
+        // 1.5 Fetch user progress (streak, goals, read list, settings) from database
+        let loadedGoal = dailyGoal;
+        let loadedStreak = streakCount;
+        let loadedReadHadiths = readHadithIds;
+        let loadedHistory = readHistory;
+
+        if (isSupabaseConfigured) {
+          const cloudProgress = await db.getUserProgress();
+          if (cloudProgress) {
+            loadedGoal = cloudProgress.daily_goal;
+            loadedStreak = cloudProgress.streak_count;
+            loadedReadHadiths = new Set(cloudProgress.read_hadiths);
+            loadedHistory = cloudProgress.read_history;
+
+            setStreakCount(loadedStreak);
+            setDailyGoal(loadedGoal);
+            setReadHadithIds(loadedReadHadiths);
+            setReadHistory(loadedHistory);
+
+            // Update local storage fallbacks
+            localStorage.setItem('bukhari_streak_count', String(loadedStreak));
+            localStorage.setItem('bukhari_daily_goal', String(loadedGoal));
+            localStorage.setItem('bukhari_read_hadiths', JSON.stringify(cloudProgress.read_hadiths));
+            localStorage.setItem('bukhari_read_history', JSON.stringify(loadedHistory));
+            if (cloudProgress.last_read_date) {
+              localStorage.setItem('bukhari_last_read_date', cloudProgress.last_read_date);
+            }
+
+            // Restore settings from cloud
+            const settings = cloudProgress.settings;
+            if (settings) {
+              if (settings.ummuhat_language) {
+                setLanguage(settings.ummuhat_language as 'english' | 'arabic');
+                localStorage.setItem('ummuhat_language', settings.ummuhat_language);
+              }
+              if (settings.ummuhat_theme) {
+                setTheme(settings.ummuhat_theme as Theme);
+                localStorage.setItem('ummuhat_theme', settings.ummuhat_theme);
+              }
+              if (settings.sahihbukhari_reminders_enabled) {
+                setRemindersEnabled(settings.sahihbukhari_reminders_enabled === 'true');
+                localStorage.setItem('sahihbukhari_reminders_enabled', settings.sahihbukhari_reminders_enabled);
+              }
+              if (settings.sahihbukhari_reminder_time) {
+                setReminderTime(settings.sahihbukhari_reminder_time);
+                localStorage.setItem('sahihbukhari_reminder_time', settings.sahihbukhari_reminder_time);
+              }
+              if (settings.ummuhat_arabic_font) {
+                setArabicFont(settings.ummuhat_arabic_font as ArabicFont);
+                localStorage.setItem('ummuhat_arabic_font', settings.ummuhat_arabic_font);
+              }
+              if (settings.ummuhat_text_alignment) {
+                setTextAlignment(settings.ummuhat_text_alignment as TextAlignment);
+                localStorage.setItem('ummuhat_text_alignment', settings.ummuhat_text_alignment);
+              }
+              if (settings.ummuhat_show_sanad) {
+                setShowSanad(settings.ummuhat_show_sanad === 'true');
+                localStorage.setItem('ummuhat_show_sanad', settings.ummuhat_show_sanad);
+              }
+              if (settings.ummuhat_reading_layout) {
+                setReadingLayout(settings.ummuhat_reading_layout as ReadingLayout);
+                localStorage.setItem('ummuhat_reading_layout', settings.ummuhat_reading_layout);
+              }
+              if (settings.ummuhat_arabic_font_size) {
+                setArabicFontSize(parseInt(settings.ummuhat_arabic_font_size, 10));
+                localStorage.setItem('ummuhat_arabic_font_size', settings.ummuhat_arabic_font_size);
+              }
+              if (settings.ummuhat_translation_font_size) {
+                setTranslationFontSize(parseInt(settings.ummuhat_translation_font_size, 10));
+                localStorage.setItem('ummuhat_translation_font_size', settings.ummuhat_translation_font_size);
+              }
+              if (settings.bukhari_active_reading_plan) {
+                setActiveReadingPlan(settings.bukhari_active_reading_plan);
+                localStorage.setItem('bukhari_active_reading_plan', settings.bukhari_active_reading_plan);
+              }
+            }
+          } else {
+            // First time connecting or empty cloud, initialize from local
+            const localSettings = {
+              ummuhat_language: localStorage.getItem('ummuhat_language') || 'arabic',
+              ummuhat_theme: localStorage.getItem('ummuhat_theme') || 'night',
+              sahihbukhari_reminders_enabled: localStorage.getItem('sahihbukhari_reminders_enabled') || 'false',
+              sahihbukhari_reminder_time: localStorage.getItem('sahihbukhari_reminder_time') || '09:00',
+              ummuhat_arabic_font: localStorage.getItem('ummuhat_arabic_font') || 'Amiri',
+              ummuhat_text_alignment: localStorage.getItem('ummuhat_text_alignment') || 'right',
+              ummuhat_show_sanad: localStorage.getItem('ummuhat_show_sanad') || 'true',
+              ummuhat_reading_layout: localStorage.getItem('ummuhat_reading_layout') || 'page',
+              ummuhat_arabic_font_size: localStorage.getItem('ummuhat_arabic_font_size') || '22',
+              ummuhat_translation_font_size: localStorage.getItem('ummuhat_translation_font_size') || '17',
+              bukhari_active_reading_plan: localStorage.getItem('bukhari_active_reading_plan') || 'none',
+            };
+            const savedReadList = localStorage.getItem('bukhari_read_hadiths');
+            const parsedReadList = savedReadList ? JSON.parse(savedReadList) : [];
+            const savedHistory = localStorage.getItem('bukhari_read_history');
+            const parsedHistory = savedHistory ? JSON.parse(savedHistory) : {};
+
+            await db.syncUserProgress({
+              streak_count: parseInt(localStorage.getItem('bukhari_streak_count') || '0', 10),
+              last_read_date: localStorage.getItem('bukhari_last_read_date') || null,
+              daily_goal: parseInt(localStorage.getItem('bukhari_daily_goal') || '5', 10),
+              read_hadiths: parsedReadList,
+              read_history: parsedHistory,
+              settings: localSettings
+            });
+          }
+        }
         
         // 2. Fetch bookmarks from database
         const bms = await db.getBookmarks();
@@ -705,10 +874,90 @@ const App: React.FC = () => {
         console.error("Failed to load initial data", err);
       } finally {
         setLoading(false);
+        setTimeout(() => {
+          isLoaded.current = true;
+        }, 500);
       }
     };
     loadData();
   }, []);
+
+  // Sync state modifications to cloud db
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    const timer = setTimeout(() => {
+      syncProgressToDb();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [streakCount, dailyGoal, readHadithIds, readHistory, theme, language, remindersEnabled, reminderTime, arabicFont, displayMode, textAlignment, showSanad, readingLayout, arabicFontSize, translationFontSize, activeReadingPlan]);
+
+  const handleRestoreBackup = async () => {
+    if (!backupCodeInput.trim()) {
+      triggerToast(language === 'arabic' ? 'يرجى إدخال رمز مزامنة صالح' : 'Please enter a valid sync code');
+      return;
+    }
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(backupCodeInput.trim())) {
+      triggerToast(language === 'arabic' ? 'صيغة رمز المزامنة غير صالحة. يرجى التأكد من الرمز' : 'Invalid sync code format. Please check the code.');
+      return;
+    }
+    
+    setIsRestoringBackup(true);
+    isLoaded.current = false; // Disable auto-sync during restore
+    try {
+      const res = await db.restoreBackup(backupCodeInput.trim());
+      if (res.success && res.progress) {
+        // Update states
+        setStreakCount(res.progress.streak_count);
+        setDailyGoal(res.progress.daily_goal);
+        setReadHadithIds(new Set(res.progress.read_hadiths));
+        setReadHistory(res.progress.read_history);
+        
+        if (res.bookmarks) {
+          setBookmarkedIds(res.bookmarks);
+          const bmHadiths = await db.getBookmarkedHadiths();
+          setBookmarkedHadiths(bmHadiths);
+        }
+        if (res.notes) {
+          setNotes(res.notes);
+          const notesH = await db.getNotesWithHadiths();
+          setNotesWithHadiths(notesH);
+        }
+        if (res.readingProgress) {
+          setLastReadHadith(res.readingProgress);
+        }
+
+        // Restore settings states
+        const settings = res.progress.settings;
+        if (settings) {
+          if (settings.ummuhat_language) setLanguage(settings.ummuhat_language);
+          if (settings.ummuhat_theme) setTheme(settings.ummuhat_theme);
+          if (settings.sahihbukhari_reminders_enabled) setRemindersEnabled(settings.sahihbukhari_reminders_enabled === 'true');
+          if (settings.sahihbukhari_reminder_time) setReminderTime(settings.sahihbukhari_reminder_time);
+          if (settings.ummuhat_arabic_font) setArabicFont(settings.ummuhat_arabic_font);
+          if (settings.ummuhat_text_alignment) setTextAlignment(settings.ummuhat_text_alignment);
+          if (settings.ummuhat_show_sanad) setShowSanad(settings.ummuhat_show_sanad === 'true');
+          if (settings.ummuhat_reading_layout) setReadingLayout(settings.ummuhat_reading_layout);
+          if (settings.ummuhat_arabic_font_size) setArabicFontSize(parseInt(settings.ummuhat_arabic_font_size, 10));
+          if (settings.ummuhat_translation_font_size) setTranslationFontSize(parseInt(settings.ummuhat_translation_font_size, 10));
+          if (settings.bukhari_active_reading_plan) setActiveReadingPlan(settings.bukhari_active_reading_plan);
+        }
+
+        triggerToast(language === 'arabic' ? 'تم استعادة البيانات والتهيئة بنجاح!' : 'Data restored and synced successfully!');
+        setBackupCodeInput('');
+      } else {
+        triggerToast(language === 'arabic' ? 'فشل استعادة البيانات. تأكد من رمز المزامنة' : 'Failed to restore backup. Check the sync code.');
+      }
+    } catch (err) {
+      console.error(err);
+      triggerToast(language === 'arabic' ? 'حدث خطأ أثناء الاتصال بقاعدة البيانات' : 'An error occurred while connecting to the database');
+    } finally {
+      setIsRestoringBackup(false);
+      setTimeout(() => {
+        isLoaded.current = true;
+      }, 500);
+    }
+  };
 
   // Theme observer
   useEffect(() => {
@@ -1292,36 +1541,34 @@ const App: React.FC = () => {
     setReadHadithIds(prev => {
       const next = new Set(prev);
       const isMarkingRead = !next.has(hadithId);
+      let nextStreak = streakCount;
+      let nextLastReadDate = localStorage.getItem('bukhari_last_read_date') || null;
+      let nextHistory = { ...readHistory };
       
       if (isMarkingRead) {
         next.add(hadithId);
         triggerToast(language === 'arabic' ? 'تم التحديد كمقروء' : 'Marked as read');
         
-        // Update read history mapping
-        setReadHistory(prevHistory => {
-          const nextHistory = { ...prevHistory, [hadithId]: todayStr };
-          localStorage.setItem('bukhari_read_history', JSON.stringify(nextHistory));
-          
-          // Check if this read completes the daily goal
-          const todayCount = Object.values(nextHistory).filter(date => date === todayStr).length;
-          if (todayCount === dailyGoal) {
-            setTimeout(() => {
-              triggerToast(t.goalReached);
-              if (remindersEnabled && Notification.permission === 'granted') {
-                try {
-                  new Notification(t.goalReachedTitle, {
-                    body: t.goalReachedBody.replace('{0}', formatNumber(dailyGoal)),
-                    icon: '/app-icon.png',
-                    badge: '/favicon.svg'
-                  });
-                } catch (err) {
-                  console.warn("Failed to fire goal reached notification", err);
-                }
+        nextHistory[hadithId] = todayStr;
+        
+        // Check if this read completes the daily goal
+        const todayCount = Object.values(nextHistory).filter(date => date === todayStr).length;
+        if (todayCount === dailyGoal) {
+          setTimeout(() => {
+            triggerToast(t.goalReached);
+            if (remindersEnabled && Notification.permission === 'granted') {
+              try {
+                new Notification(t.goalReachedTitle, {
+                  body: t.goalReachedBody.replace('{0}', formatNumber(dailyGoal)),
+                  icon: '/app-icon.png',
+                  badge: '/favicon.svg'
+                });
+              } catch (err) {
+                console.warn("Failed to fire goal reached notification", err);
               }
-            }, 600);
-          }
-          return nextHistory;
-        });
+            }
+          }, 600);
+        }
 
         // Update Reading Streak
         const lastRead = localStorage.getItem('bukhari_last_read_date');
@@ -1334,38 +1581,37 @@ const App: React.FC = () => {
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             
             if (diffDays === 1) {
-              // Consecutive day
-              setStreakCount(prevStreak => {
-                const nextStreak = prevStreak + 1;
-                localStorage.setItem('bukhari_streak_count', String(nextStreak));
-                return nextStreak;
-              });
+              nextStreak = streakCount + 1;
             } else if (diffDays > 1) {
-              // Streak broken, start new
-              setStreakCount(1);
-              localStorage.setItem('bukhari_streak_count', '1');
+              nextStreak = 1;
             }
           }
         } else {
-          // First time reading
-          setStreakCount(1);
-          localStorage.setItem('bukhari_streak_count', '1');
+          nextStreak = 1;
         }
+        nextLastReadDate = todayStr;
         localStorage.setItem('bukhari_last_read_date', todayStr);
-
+        localStorage.setItem('bukhari_streak_count', String(nextStreak));
       } else {
         next.delete(hadithId);
         triggerToast(language === 'arabic' ? 'تم التحديد كغير مقروء' : 'Marked as unread');
-        
-        // Remove from read history
-        setReadHistory(prevHistory => {
-          const nextHistory = { ...prevHistory };
-          delete nextHistory[hadithId];
-          localStorage.setItem('bukhari_read_history', JSON.stringify(nextHistory));
-          return nextHistory;
-        });
+        delete nextHistory[hadithId];
       }
+      
+      localStorage.setItem('bukhari_read_history', JSON.stringify(nextHistory));
       localStorage.setItem('bukhari_read_hadiths', JSON.stringify(Array.from(next)));
+      
+      setReadHistory(nextHistory);
+      setStreakCount(nextStreak);
+      
+      // Sync to cloud database
+      syncProgressToDb({
+        streak_count: nextStreak,
+        last_read_date: nextLastReadDate,
+        read_hadiths: Array.from(next),
+        read_history: nextHistory
+      });
+
       return next;
     });
   };
@@ -4233,9 +4479,109 @@ const App: React.FC = () => {
                           )}
                         </>
                       )}
-                    </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Cloud Backup & Sync Section */}
+                {isSupabaseConfigured && (
+                  <div className="glass-card" style={{ padding: '2rem', border: '1px solid var(--glass-border)', marginTop: '2rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
+                      <Cloud size={20} style={{ color: 'var(--accent-emerald)' }} />
+                      <h3 style={{ fontSize: '1.2rem', fontWeight: 500, margin: 0 }}>{t.backupSyncTitle}</h3>
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: '1.45' }}>
+                      {t.backupSyncDesc}
+                    </p>
+                    
+                    {/* Display Sync Code */}
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)', marginBottom: '1.5rem' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>{t.yourSyncCode}</span>
+                      <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <code style={{ fontSize: '0.85rem', color: 'var(--accent-emerald)', wordBreak: 'break-all', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
+                          {getOrInitUserId()}
+                        </code>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(getOrInitUserId());
+                            triggerToast(t.syncCodeCopied);
+                          }}
+                          className="action-btn"
+                          style={{
+                            background: 'var(--input-bg)',
+                            border: '1px solid var(--glass-border)',
+                            borderRadius: '8px',
+                            padding: '0.4rem 0.8rem',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          <Copy size={13} />
+                          {t.copyCode}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Restore Sync Code */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      <h4 style={{ fontSize: '0.9rem', fontWeight: 500, margin: 0 }}>{t.restoreTitle}</h4>
+                      <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
+                        <input 
+                          type="text" 
+                          placeholder={t.restorePlaceholder}
+                          value={backupCodeInput}
+                          onChange={(e) => setBackupCodeInput(e.target.value)}
+                          style={{
+                            flex: 1,
+                            minWidth: '240px',
+                            background: 'var(--input-bg)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--glass-border)',
+                            borderRadius: '10px',
+                            padding: '0.6rem 0.8rem',
+                            fontSize: '0.85rem',
+                            outline: 'none'
+                          }}
+                        />
+                        <button 
+                          onClick={handleRestoreBackup}
+                          disabled={isRestoringBackup}
+                          style={{
+                            background: 'linear-gradient(135deg, var(--accent-emerald) 0%, #22c55e 100%)',
+                            color: 'white',
+                            border: 'none',
+                            padding: '0.6rem 1.2rem',
+                            borderRadius: '10px',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            opacity: isRestoringBackup ? 0.7 : 1
+                          }}
+                        >
+                          {isRestoringBackup ? (
+                            <>
+                              <RotateCw size={14} className="animate-spin" />
+                              {t.restoring}
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw size={14} />
+                              {t.restoreBtn}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
 

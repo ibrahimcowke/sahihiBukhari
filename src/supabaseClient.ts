@@ -39,6 +39,34 @@ const LOCAL_BOOKMARKS_KEY = 'bukhari_bookmarks';
 const LOCAL_NOTES_KEY = 'bukhari_notes';
 const LOCAL_PROGRESS_KEY = 'bukhari_progress';
 const LOCAL_CACHED_HADITHS_KEY = 'bukhari_cached_hadiths';
+const LOCAL_USER_ID_KEY = 'bukhari_sync_user_id';
+
+export interface UserProgressData {
+  streak_count: number;
+  last_read_date: string | null;
+  daily_goal: number;
+  read_hadiths: number[];
+  read_history: Record<number, string>;
+  settings: Record<string, any>;
+}
+
+// Generate or retrieve persistent user/device UUID
+export function getOrInitUserId(): string {
+  let id = localStorage.getItem(LOCAL_USER_ID_KEY);
+  if (!id) {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      id = crypto.randomUUID();
+    } else {
+      // Fallback RFC4122 compliant UUID generator
+      id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+    localStorage.setItem(LOCAL_USER_ID_KEY, id);
+  }
+  return id;
+}
 
 const getLocalBookmarks = (): number[] => {
   const data = localStorage.getItem(LOCAL_BOOKMARKS_KEY);
@@ -102,7 +130,7 @@ export function mapDbHadith(row: Partial<DbHadith> | null | undefined): Hadith {
   };
 }
 
-// Database API with Local Fallbacks
+// Database API with Local Fallbacks and User Isolation
 export const db = {
   // Ensure hadith is cached in the DB to satisfy foreign keys
   async ensureHadithExists(hadith: Hadith): Promise<void> {
@@ -146,9 +174,11 @@ export const db = {
   async getBookmarkedHadiths(): Promise<Hadith[]> {
     if (supabase) {
       try {
+        const userId = getOrInitUserId();
         const { data, error } = await supabase
           .from('bookmarks')
-          .select('hadith_id, hadiths(*)');
+          .select('hadith_id, hadiths(*)')
+          .eq('user_id', userId);
         
         if (!error && data) {
           return data
@@ -169,9 +199,11 @@ export const db = {
   async getNotesWithHadiths(): Promise<{hadith: Hadith, content: string}[]> {
     if (supabase) {
       try {
+        const userId = getOrInitUserId();
         const { data, error } = await supabase
           .from('notes')
-          .select('content, hadiths(*)');
+          .select('content, hadiths(*)')
+          .eq('user_id', userId);
         
         if (!error && data) {
           return data
@@ -202,9 +234,11 @@ export const db = {
   // Bookmarks IDs (for quick check in views)
   async getBookmarks(): Promise<number[]> {
     if (supabase) {
+      const userId = getOrInitUserId();
       const { data, error } = await supabase
         .from('bookmarks')
-        .select('hadith_id');
+        .select('hadith_id')
+        .eq('user_id', userId);
       
       if (!error && data) {
         return data.map(item => item.hadith_id);
@@ -216,34 +250,6 @@ export const db = {
 
   async toggleBookmark(hadith: Hadith): Promise<boolean> {
     await this.ensureHadithExists(hadith);
-    
-    if (supabase) {
-      // Check if bookmarked
-      const { data, error } = await supabase
-        .from('bookmarks')
-        .select('id')
-        .eq('hadith_id', hadith.id)
-        .maybeSingle();
-
-      if (!error) {
-        if (data) {
-          // Delete bookmark
-          const { error: delError } = await supabase
-            .from('bookmarks')
-            .delete()
-            .eq('hadith_id', hadith.id);
-          return !delError ? false : true;
-        } else {
-          // Add bookmark
-          const { error: insError } = await supabase
-            .from('bookmarks')
-            .insert([{ hadith_id: hadith.id }]);
-          return !insError ? true : false;
-        }
-      }
-      console.error("Error toggling bookmark on Supabase, falling back to local:", error);
-    }
-    
     const local = getLocalBookmarks();
     const index = local.indexOf(hadith.id);
     let bookmarked = false;
@@ -253,6 +259,43 @@ export const db = {
       local.push(hadith.id);
       bookmarked = true;
     }
+    
+    if (supabase) {
+      const userId = getOrInitUserId();
+      // Check if bookmarked
+      const { data, error } = await supabase
+        .from('bookmarks')
+        .select('id')
+        .eq('hadith_id', hadith.id)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (!error) {
+        if (data) {
+          // Delete bookmark
+          const { error: delError } = await supabase
+            .from('bookmarks')
+            .delete()
+            .eq('hadith_id', hadith.id)
+            .eq('user_id', userId);
+          if (!delError) {
+            saveLocalBookmarks(local);
+            return false;
+          }
+        } else {
+          // Add bookmark
+          const { error: insError } = await supabase
+            .from('bookmarks')
+            .insert([{ user_id: userId, hadith_id: hadith.id }]);
+          if (!insError) {
+            saveLocalBookmarks(local);
+            return true;
+          }
+        }
+      }
+      console.error("Error toggling bookmark on Supabase, falling back to local:", error);
+    }
+    
     saveLocalBookmarks(local);
     return bookmarked;
   },
@@ -260,9 +303,11 @@ export const db = {
   // Notes Map (for quick checks)
   async getNotes(): Promise<Record<number, string>> {
     if (supabase) {
+      const userId = getOrInitUserId();
       const { data, error } = await supabase
         .from('notes')
-        .select('hadith_id, content');
+        .select('hadith_id, content')
+        .eq('user_id', userId);
       
       if (!error && data) {
         const notesMap: Record<number, string> = {};
@@ -278,13 +323,17 @@ export const db = {
 
   async saveNote(hadith: Hadith, content: string): Promise<boolean> {
     await this.ensureHadithExists(hadith);
+    const local = getLocalNotes();
+    local[hadith.id] = content;
 
     if (supabase) {
+      const userId = getOrInitUserId();
       // Upsert note
       const { data, error: selectError } = await supabase
         .from('notes')
         .select('id')
         .eq('hadith_id', hadith.id)
+        .eq('user_id', userId)
         .maybeSingle();
 
       if (!selectError) {
@@ -293,36 +342,47 @@ export const db = {
           const { error: updateError } = await supabase
             .from('notes')
             .update({ content, updated_at: new Date().toISOString() })
-            .eq('hadith_id', hadith.id);
-          return !updateError;
+            .eq('hadith_id', hadith.id)
+            .eq('user_id', userId);
+          if (!updateError) {
+            saveLocalNotes(local);
+            return true;
+          }
         } else {
           // Insert
           const { error: insertError } = await supabase
             .from('notes')
-            .insert([{ hadith_id: hadith.id, content }]);
-          return !insertError;
+            .insert([{ user_id: userId, hadith_id: hadith.id, content }]);
+          if (!insertError) {
+            saveLocalNotes(local);
+            return true;
+          }
         }
       }
       console.error("Error saving note to Supabase, falling back to local:", selectError);
     }
 
-    const local = getLocalNotes();
-    local[hadith.id] = content;
     saveLocalNotes(local);
     return true;
   },
 
   async deleteNote(hadithId: number): Promise<boolean> {
+    const local = getLocalNotes();
+    delete local[hadithId];
+
     if (supabase) {
+      const userId = getOrInitUserId();
       const { error } = await supabase
         .from('notes')
         .delete()
-        .eq('hadith_id', hadithId);
-      return !error;
+        .eq('hadith_id', hadithId)
+        .eq('user_id', userId);
+      if (!error) {
+        saveLocalNotes(local);
+        return true;
+      }
     }
 
-    const local = getLocalNotes();
-    delete local[hadithId];
     saveLocalNotes(local);
     return true;
   },
@@ -332,11 +392,11 @@ export const db = {
     let hadithId: number | null = null;
     if (supabase) {
       try {
+        const userId = getOrInitUserId();
         const { data, error } = await supabase
           .from('reading_progress')
           .select('hadith_id')
-          .order('updated_at', { ascending: false })
-          .limit(1)
+          .eq('user_id', userId)
           .maybeSingle();
 
         if (!error && data) {
@@ -375,13 +435,15 @@ export const db = {
 
   async saveReadingProgress(hadith: Hadith): Promise<boolean> {
     await this.ensureHadithExists(hadith);
+    localStorage.setItem(LOCAL_PROGRESS_KEY, hadith.id.toString());
 
     if (supabase) {
+      const userId = getOrInitUserId();
       // We can insert/update the progress
       const { data, error: selectError } = await supabase
         .from('reading_progress')
         .select('id')
-        .limit(1)
+        .eq('user_id', userId)
         .maybeSingle();
 
       if (!selectError) {
@@ -390,20 +452,197 @@ export const db = {
           const { error: updateError } = await supabase
             .from('reading_progress')
             .update({ hadith_id: hadith.id, updated_at: new Date().toISOString() })
-            .eq('id', data.id);
+            .eq('id', data.id)
+            .eq('user_id', userId);
           return !updateError;
         } else {
           // Insert
           const { error: insertError } = await supabase
             .from('reading_progress')
-            .insert([{ hadith_id: hadith.id }]);
+            .insert([{ user_id: userId, hadith_id: hadith.id }]);
           return !insertError;
         }
       }
       console.error("Error saving reading progress to Supabase, falling back to local:", selectError);
     }
 
-    localStorage.setItem(LOCAL_PROGRESS_KEY, hadith.id.toString());
     return true;
+  },
+
+  // User Progress: Streaks, Goals, and Settings
+  async getUserProgress(): Promise<UserProgressData | null> {
+    if (supabase) {
+      try {
+        const userId = getOrInitUserId();
+        const { data, error } = await supabase
+          .from('user_progress')
+          .select('streak_count, last_read_date, daily_goal, read_hadiths, read_history, settings')
+          .eq('user_id', userId)
+          .maybeSingle();
+        
+        if (!error && data) {
+          return {
+            streak_count: data.streak_count,
+            last_read_date: data.last_read_date,
+            daily_goal: data.daily_goal,
+            read_hadiths: Array.isArray(data.read_hadiths) ? data.read_hadiths : [],
+            read_history: typeof data.read_history === 'object' && data.read_history ? data.read_history : {},
+            settings: typeof data.settings === 'object' && data.settings ? data.settings : {}
+          };
+        }
+        if (error) {
+          console.error("Error fetching user progress from Supabase:", error);
+        }
+      } catch (err) {
+        console.error("Supabase user progress catch:", err);
+      }
+    }
+    return null;
+  },
+
+  async syncUserProgress(progress: Partial<UserProgressData>): Promise<boolean> {
+    if (supabase) {
+      try {
+        const userId = getOrInitUserId();
+        // Check if user progress row exists
+        const { data, error: selectError } = await supabase
+          .from('user_progress')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+        
+        if (!selectError) {
+          if (data) {
+            // Update
+            const { error: updateError } = await supabase
+              .from('user_progress')
+              .update({
+                ...progress,
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', userId);
+            return !updateError;
+          } else {
+            // Insert
+            const { error: insertError } = await supabase
+              .from('user_progress')
+              .insert([{
+                user_id: userId,
+                streak_count: progress.streak_count || 0,
+                last_read_date: progress.last_read_date || null,
+                daily_goal: progress.daily_goal || 5,
+                read_hadiths: progress.read_hadiths || [],
+                read_history: progress.read_history || {},
+                settings: progress.settings || {}
+              }]);
+            return !insertError;
+          }
+        }
+        console.error("Error checking user progress existence:", selectError);
+      } catch (err) {
+        console.error("Supabase user progress sync catch:", err);
+      }
+    }
+    return false;
+  },
+
+  async restoreBackup(backupUserId: string): Promise<{
+    success: boolean;
+    progress?: UserProgressData;
+    bookmarks?: number[];
+    notes?: Record<number, string>;
+    readingProgress?: Hadith | null;
+  }> {
+    if (!supabase) {
+      return { success: false };
+    }
+    try {
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(backupUserId)) {
+        return { success: false };
+      }
+
+      // Check if user progress exists for this ID
+      const { data: progressRow, error: progressErr } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', backupUserId)
+        .maybeSingle();
+
+      if (progressErr || !progressRow) {
+        // Check if bookmarks or notes exist for this user before giving up
+        const { data: bCheck } = await supabase
+          .from('bookmarks')
+          .select('id')
+          .eq('user_id', backupUserId)
+          .limit(1);
+        
+        const { data: nCheck } = await supabase
+          .from('notes')
+          .select('id')
+          .eq('user_id', backupUserId)
+          .limit(1);
+        
+        if ((!bCheck || bCheck.length === 0) && (!nCheck || nCheck.length === 0)) {
+          return { success: false };
+        }
+      }
+
+      // Set new user ID
+      localStorage.setItem(LOCAL_USER_ID_KEY, backupUserId);
+
+      // Map progress values
+      const progress: UserProgressData = {
+        streak_count: progressRow?.streak_count || 0,
+        last_read_date: progressRow?.last_read_date || null,
+        daily_goal: progressRow?.daily_goal || 5,
+        read_hadiths: Array.isArray(progressRow?.read_hadiths) ? progressRow.read_hadiths : [],
+        read_history: typeof progressRow?.read_history === 'object' && progressRow.read_history ? progressRow.read_history : {},
+        settings: typeof progressRow?.settings === 'object' && progressRow.settings ? progressRow.settings : {}
+      };
+
+      // Fetch all items from DB with the new user_id context
+      const bms = await this.getBookmarks();
+      const nts = await this.getNotes();
+      const readingProgress = await this.getReadingProgressHadith();
+
+      // Overwrite local storage values
+      localStorage.setItem('bukhari_streak_count', progress.streak_count.toString());
+      if (progress.last_read_date) {
+        localStorage.setItem('bukhari_last_read_date', progress.last_read_date);
+      } else {
+        localStorage.removeItem('bukhari_last_read_date');
+      }
+      localStorage.setItem('bukhari_daily_goal', progress.daily_goal.toString());
+      localStorage.setItem('bukhari_read_hadiths', JSON.stringify(progress.read_hadiths));
+      localStorage.setItem('bukhari_read_history', JSON.stringify(progress.read_history));
+      
+      saveLocalBookmarks(bms);
+      saveLocalNotes(nts);
+      if (readingProgress) {
+        localStorage.setItem(LOCAL_PROGRESS_KEY, readingProgress.id.toString());
+      }
+
+      // Write settings fields to local storage
+      if (progress.settings) {
+        Object.entries(progress.settings).forEach(([key, val]) => {
+          if (val !== undefined && val !== null) {
+            localStorage.setItem(key, typeof val === 'object' ? JSON.stringify(val) : val.toString());
+          }
+        });
+      }
+
+      return {
+        success: true,
+        progress,
+        bookmarks: bms,
+        notes: nts,
+        readingProgress
+      };
+    } catch (err) {
+      console.error("Failed to restore backup:", err);
+      return { success: false };
+    }
   }
 };
